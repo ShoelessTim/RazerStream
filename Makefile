@@ -51,7 +51,29 @@ TEST_FLAGS = \
 	-Xlinker -rpath -Xlinker $(KITOBJ) \
 	-o $(BUILD)/RazerStreamKitTests
 
-.PHONY: all kit cli test clean run
+APP_SOURCES = \
+	Sources/RazerStreamApp/Profile.swift \
+	Sources/RazerStreamApp/ActionEngine.swift \
+	Sources/RazerStreamApp/TileRenderer.swift \
+	Sources/RazerStreamApp/DeviceManager.swift \
+	Sources/RazerStreamApp/ContentView.swift \
+	Sources/RazerStreamApp/RazerStreamApp.swift
+
+APP_FLAGS = \
+	-sdk $(SDK) \
+	-parse-as-library \
+	-module-name RazerStreamApp \
+	-I $(KITOBJ) \
+	-L $(KITOBJ) \
+	-lRazerStreamKit \
+	-framework IOKit \
+	-framework CoreFoundation \
+	-framework AppKit \
+	-framework SwiftUI \
+	-Xlinker -rpath -Xlinker @executable_path \
+	-o $(BUILD)/RazerStreamApp
+
+.PHONY: all kit cli app test clean run
 
 all: cli
 
@@ -63,6 +85,10 @@ kit: $(KITOBJ)
 
 cli: kit
 	$(SWIFT) $(CLI_SOURCES) $(CLI_FLAGS)
+
+app: kit
+	$(SWIFT) $(APP_SOURCES) $(APP_FLAGS)
+	cp $(KITOBJ)/libRazerStreamKit.dylib $(BUILD)/
 
 test: kit
 	$(SWIFT) $(TEST_SOURCES) $(TEST_FLAGS)
