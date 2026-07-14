@@ -11,39 +11,51 @@ struct ContentView: View {
     @State private var selection: Selection?
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 14) {
-                statusBar
-                pageBar
-                deviceMirror
-                physicalButtonRow
-                Spacer(minLength: 0)
-            }
-            .padding()
-            .frame(minWidth: 560)
+        VStack(spacing: 0) {
+            HSplitView {
+                VStack(spacing: 14) {
+                    pageBar
+                    deviceMirror
+                    physicalButtonRow
+                    Spacer(minLength: 0)
+                }
+                .padding()
+                .frame(minWidth: 560)
 
-            inspector
-                .frame(minWidth: 300, maxWidth: 360)
+                inspector
+                    .frame(minWidth: 300, maxWidth: 360)
+            }
+
+            statusBar
         }
         .frame(minWidth: 900, minHeight: 560)
     }
 
-    // MARK: - Status
+    // MARK: - Status bar; lives at the bottom of the window
 
     private var statusBar: some View {
-        HStack {
+        HStack(spacing: 10) {
             Circle()
                 .fill(deviceManager.connected ? .green : .red)
-                .frame(width: 10, height: 10)
+                .frame(width: 8, height: 8)
             Text(deviceManager.connected
-                 ? "Connected — fw \(deviceManager.firmware)"
+                 ? "Connected · fw \(deviceManager.firmware)"
                  : "Waiting for device…")
-                .font(.callout)
+                .font(.caption)
+            if deviceManager.connected {
+                Text(deviceManager.serial)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
             Spacer()
             Text(deviceManager.lastEvent)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: - Pages

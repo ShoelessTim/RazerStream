@@ -21,6 +21,16 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$ROOT/.build/$CONFIG/RazerStreamApp" "$APP/Contents/MacOS/RazerStream"
 
+# App icon; generated once, reused until deleted
+ICONSET="$ROOT/dist/AppIcon.iconset"
+ICNS="$ROOT/dist/AppIcon.icns"
+if [ ! -f "$ICNS" ]; then
+    echo "Rendering app icon…"
+    swift "$ROOT/scripts/make_icon.swift" "$ICONSET"
+    iconutil -c icns "$ICONSET" -o "$ICNS"
+fi
+cp "$ICNS" "$APP/Contents/Resources/AppIcon.icns"
+
 cat > "$APP/Contents/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -34,6 +44,7 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <key>CFBundleShortVersionString</key>  <string>1.0</string>
     <key>CFBundleVersion</key>             <string>1</string>
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
+    <key>CFBundleIconFile</key>            <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>     <true/>
     <key>NSHumanReadableCopyright</key>    <string>Community project — MIT</string>
 </dict>

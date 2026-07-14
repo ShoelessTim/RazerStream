@@ -54,12 +54,8 @@ struct RazerStreamApp: App {
                 NSApplication.shared.terminate(nil)
             }
         } label: {
-            // Tiny deck render + live event readout
-            HStack(spacing: 4) {
-                Image(nsImage: DeckIcon.menuBar)
-                Text(deviceManager.connected ? deviceManager.lastEvent : "—")
-                    .font(.system(size: 11).monospaced())
-            }
+            // Icon only; the live readout lives in the window status bar
+            Image(nsImage: DeckIcon.menuBar)
         }
     }
 }
