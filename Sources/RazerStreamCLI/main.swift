@@ -132,6 +132,10 @@ func runTestPattern() {
         // Wait for handshake to complete before drawing
         Thread.sleep(forTimeInterval: 2.0)
 
+        // Restore brightness first — a previous session may have left it at 0
+        try device.send(.setBrightness(10))
+        Thread.sleep(forTimeInterval: 0.2)
+
         let px = RazerStreamController.buttonSize * RazerStreamController.buttonSize
         for (i, c) in colors.enumerated() {
             let (lo, hi) = rgb565(c.r, c.g, c.b)

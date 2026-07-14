@@ -6,12 +6,12 @@ final class DeviceCommandTests: XCTestCase {
     func testSetBrightnessEncoding() {
         let (cmd, payload) = DeviceCommand.setBrightness(7).encode()
         XCTAssertEqual(cmd, .setBrightness)
-        XCTAssertEqual(payload, Data([0x00, 0x07]))
+        XCTAssertEqual(payload, Data([0x07]), "Single byte — a 0x00 prefix blanks the panel")
     }
 
     func testSetBrightnessClamped() {
         let (_, payload) = DeviceCommand.setBrightness(99).encode()
-        XCTAssertEqual(payload[1], maxBrightness, "Should clamp to maxBrightness")
+        XCTAssertEqual(payload[0], maxBrightness, "Should clamp to maxBrightness")
     }
 
     func testSetButtonColor() {

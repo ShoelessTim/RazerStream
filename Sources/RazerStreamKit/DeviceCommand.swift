@@ -21,8 +21,10 @@ extension DeviceCommand {
         switch self {
 
         case .setBrightness(let level):
+            // Payload is a single byte 0–10. (A leading 0x00 gets read as
+            // "brightness zero" and blanks the panel.)
             let clamped = min(level, maxBrightness)
-            return (.setBrightness, Data([0x00, clamped]))
+            return (.setBrightness, Data([clamped]))
 
         case .setButtonColor(let btn, let r, let g, let b):
             // SET_COLOR payload: [buttonID, r, g, b]

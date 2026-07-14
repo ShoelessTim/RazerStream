@@ -113,12 +113,34 @@ final class DeviceManager: ObservableObject {
 
     // MARK: - Push profile to device
 
+    private var pushTask: Task<Void, Never>?
+
     func pushProfile() {
         guard let device, let profile = store?.activeProfile else { return }
-        try? device.send(.setBrightness(profile.brightness))
-        for (i, tile) in profile.tiles.enumerated() {
-            let rgb565 = TileRenderer.render(tile)
-            try? device.send(.setButtonImage(button: i, rgb565: rgb565))
+        // Pace writes: blasting 12 framebuffers back-to-back overruns the
+        // device's serial buffer and nothing renders. ~60ms apart is reliable.
+        pushTask?.cancel()
+        pushTask = Task {
+            try? device.send(.setBrightness(profile.brightness))
+            try? await Task.sleep(for: .milliseconds(60))
+            for (i, tile) in profile.tiles.enumerated() {
+                if Task.isCancelled { return }
+                let rgb565 = TileRenderer.render(tile)
+                try? device.send(.setButtonImage(button: i, rgb565: rgb565))
+                try? await Task.sleep(for: .milliseconds(60))
+            }
+
+            // Knob strips: zones 0–2 on the left edge (x=0), 3–5 right (x=420)
+            for i in 0..<RazerStreamController.knobCount {
+                if Task.isCancelled { return }
+                let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
+                let y = (i % 3) * 90
+                let rgb565 = TileRenderer.renderKnobZone(index: i)
+                try? device.send(.setDisplayImage(
+                    display: .center, x: x, y: y, w: 60, h: 90, rgb565: rgb565
+                ))
+                try? await Task.sleep(for: .milliseconds(60))
+            }
         }
     }
 }

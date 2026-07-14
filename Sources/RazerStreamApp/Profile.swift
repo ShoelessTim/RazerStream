@@ -29,6 +29,7 @@ enum ControlAction: Codable, Equatable {
 struct TileConfig: Codable, Equatable {
     var label: String = ""
     var colorHex: String = "333333"       // background color of the tile
+    var imagePath: String? = nil          // optional image drawn over the background
     var action: ControlAction = .none
 }
 
@@ -75,6 +76,14 @@ final class ProfileStore: ObservableObject {
         if profiles.isEmpty {
             var p = Profile()
             p.name = "Default"
+            // Visible starter tiles so a fresh install shows something on-device
+            let starterColors = ["8E3B46", "B36A2E", "8F8A2B", "3E7C4F",
+                                 "2E7C8F", "31518F", "6C3E8F", "8F2E6E",
+                                 "4A4E69", "22577A", "38A3A5", "57CC99"]
+            for i in 0..<p.tiles.count {
+                p.tiles[i].label = "\(i)"
+                p.tiles[i].colorHex = starterColors[i % starterColors.count]
+            }
             profiles = [p]
             activeProfileID = p.id
             save()

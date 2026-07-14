@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "RazerStreamKit", targets: ["RazerStreamKit"]),
         .executable(name: "rstream", targets: ["RazerStreamCLI"]),
+        .executable(name: "RazerStreamApp", targets: ["RazerStreamApp"]),
     ],
     targets: [
         .target(
@@ -21,6 +22,11 @@ let package = Package(
             name: "RazerStreamCLI",
             dependencies: ["RazerStreamKit"],
             path: "Sources/RazerStreamCLI"
+        ),
+        .executableTarget(
+            name: "RazerStreamApp",
+            dependencies: ["RazerStreamKit"],
+            path: "Sources/RazerStreamApp"
         ),
         .testTarget(
             name: "RazerStreamKitTests",

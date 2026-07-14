@@ -105,6 +105,7 @@ struct TileInspector: View {
 
     @State private var label: String = ""
     @State private var colorHex: String = "333333"
+    @State private var imagePath: String = ""
     @State private var actionKind: ActionKind = .none
     @State private var actionParam: String = ""
 
@@ -120,6 +121,17 @@ struct TileInspector: View {
             Section("Tile \(tileIndex)") {
                 TextField("Label", text: $label)
                 TextField("Color (hex)", text: $colorHex)
+                HStack {
+                    TextField("Image path (optional)", text: $imagePath)
+                    Button("Choose…") {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic]
+                        panel.canChooseDirectories = false
+                        if panel.runModal() == .OK, let url = panel.url {
+                            imagePath = url.path
+                        }
+                    }
+                }
             }
             Section("Action") {
                 Picker("Type", selection: $actionKind) {
@@ -144,6 +156,7 @@ struct TileInspector: View {
         let tile = store.activeProfile.tiles[tileIndex]
         label = tile.label
         colorHex = tile.colorHex
+        imagePath = tile.imagePath ?? ""
         switch tile.action {
         case .none:                    actionKind = .none;      actionParam = ""
         case .launchApp(let p):        actionKind = .launchApp; actionParam = p
@@ -162,7 +175,12 @@ struct TileInspector: View {
         case .script:    action = .appleScript(actionParam)
         }
         store.updateActive { profile in
-            profile.tiles[tileIndex] = TileConfig(label: label, colorHex: colorHex, action: action)
+            profile.tiles[tileIndex] = TileConfig(
+                label: label,
+                colorHex: colorHex,
+                imagePath: imagePath.isEmpty ? nil : imagePath,
+                action: action
+            )
         }
         deviceManager.pushProfile()
     }
