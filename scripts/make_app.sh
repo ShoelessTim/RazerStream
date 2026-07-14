@@ -51,8 +51,17 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc sign so TCC (Accessibility) can track a stable identity
-codesign --force --deep --sign - "$APP"
+# Prefer a real signing identity when one exists; a stable identity keeps the
+# Accessibility grant valid across rebuilds. Ad hoc signing changes identity
+# every build, which forces a re-grant after each update.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/RazerStream Dev|Apple Development/ {print $2; exit}')
+if [ -n "$IDENTITY" ]; then
+    echo "Signing with: $IDENTITY"
+    codesign --force --sign "$IDENTITY" "$APP"
+else
+    echo "Signing ad hoc; Accessibility will need a re-grant after each update"
+    codesign --force --sign - "$APP"
+fi
 
 echo "Done: $APP"
 

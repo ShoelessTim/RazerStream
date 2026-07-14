@@ -29,13 +29,7 @@ enum ActionEngine {
             try? task.run()
 
         case .appleScript(let source):
-            DispatchQueue.global().async {
-                if let script = NSAppleScript(source: source) {
-                    var error: NSDictionary?
-                    script.executeAndReturnError(&error)
-                    if let error { NSLog("AppleScript error: \(error)") }
-                }
-            }
+            runAppleScript(source)
 
         case .keystroke(let combo):
             sendKeystroke(combo)
@@ -58,22 +52,32 @@ enum ActionEngine {
     }
 
     private static func runAppleScript(_ source: String) {
-        DispatchQueue.global().async {
-            NSAppleScript(source: source)?.executeAndReturnError(nil)
+        // NSAppleScript is main-thread only; running it elsewhere fails silently
+        DispatchQueue.main.async {
+            var error: NSDictionary?
+            NSAppleScript(source: source)?.executeAndReturnError(&error)
+            if let error { NSLog("AppleScript error: \(error)") }
         }
     }
 
     // MARK: - Keystrokes
 
-    /// Sends a key combo like "cmd+shift+k", "f5", "ctrl+left", "space".
-    /// Requires the Accessibility permission (prompted on first use).
-    static func sendKeystroke(_ combo: String) {
-        // Prompt for Accessibility permission if we don't have it yet.
-        // (Literal key: kAXTrustedCheckOptionPrompt is a global var that Swift 6
-        // strict concurrency rejects.)
+    /// True when macOS lets us post keyboard and media events.
+    static var hasAccessibility: Bool { AXIsProcessTrusted() }
+
+    /// Asks macOS to show the grant prompt once; safe to call repeatedly.
+    static func requestAccessibility() {
+        // Literal key; kAXTrustedCheckOptionPrompt is a global var that Swift 6
+        // strict concurrency rejects
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(options) else {
-            NSLog("Keystroke skipped: Accessibility permission not granted yet")
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+
+    /// Sends a key combo like "cmd+shift+k", "f5", "ctrl+left", "space".
+    /// Requires the Accessibility permission; check hasAccessibility first.
+    static func sendKeystroke(_ combo: String) {
+        guard hasAccessibility else {
+            NSLog("Keystroke skipped: Accessibility permission not granted")
             return
         }
 

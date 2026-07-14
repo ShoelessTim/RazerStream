@@ -33,6 +33,9 @@ struct ContentView: View {
 
     // MARK: - Status bar; lives at the bottom of the window
 
+    @State private var axGranted = ActionEngine.hasAccessibility
+    private let axTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
     private var statusBar: some View {
         HStack(spacing: 10) {
             Circle()
@@ -47,6 +50,22 @@ struct ContentView: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.tertiary)
             }
+
+            if !axGranted {
+                // Keystrokes and media keys need this; chip opens the right pane
+                Button {
+                    ActionEngine.requestAccessibility()
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Keys need Accessibility; click to grant", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+            }
+
             Spacer()
             Text(deviceManager.lastEvent)
                 .font(.caption.monospaced())
@@ -56,6 +75,9 @@ struct ContentView: View {
         .padding(.vertical, 6)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+        .onReceive(axTimer) { _ in
+            axGranted = ActionEngine.hasAccessibility
+        }
     }
 
     // MARK: - Pages

@@ -69,18 +69,32 @@ forks and sends pull requests; nothing about his workflow changes.
    - GitHub Actions CI later: swift build and swift test on PRs
 4. Prereq on this Mac: brew install gh; gh auth login; then one command setup
 
-## Track 4: Feature backlog (post-polish)
+## Track 4: Features (post-polish)
 
-1. Live tiles: clock, now playing with album art, CPU/RAM meter, calendar next-up;
+1. App switching profiles: watch the frontmost app (NSWorkspace notifications)
+   and auto-switch to a page or profile mapped to it; per-app mapping editor
+   in Settings; manual override always wins
+2. Profile import and export
+   - Native: single .razerstream JSON file for sharing layouts (drag in, drag out)
+   - Elgato Stream Deck: .streamDeckProfile is a zip of manifest JSON plus
+     button images; map 15-key layouts onto our 12 tiles with a review step
+   - Loupedeck 6.3: import what we can parse from local profile storage so
+     refugees from the dead app keep their muscle memory
+3. Icon libraries beyond SF Symbols
+   - Bundle permissively licensed packs behind the same picker UI:
+     Lucide (MIT), Tabler (MIT), Bootstrap Icons (MIT), Material Symbols
+     (Apache 2.0), simple-icons for brand logos (CC0)
+   - User icon packs: point the app at any folder of PNG/SVG files and it
+     becomes a searchable library tab; this also covers Stream Deck icon packs
+   - License text shipped with each bundled pack
+4. Live tiles: clock, now playing with album art, CPU/RAM meter, calendar next-up;
    refresh loop redraws only dirty tiles
-2. Haptics: vibrate patterns per action type (the hardware command already exists)
-3. Touch gestures: two-finger swipe on the screen switches pages
-4. Profile import/export: single .razerstream JSON file for sharing layouts
-5. Knob acceleration: fast turns scale the action (volume jumps by more)
-6. Device sleep: dim after N minutes idle; wake on any input
-7. Webhooks and Home Assistant/MQTT actions
-8. Plugin API: action providers as separate processes or scripts
-9. App switching profiles (Tim deprioritized; keep last)
+5. Haptics: vibrate patterns per action type (the hardware command already exists)
+6. Touch gestures: two-finger swipe on the screen switches pages
+7. Knob acceleration: fast turns scale the action (volume jumps by more)
+8. Device sleep: dim after N minutes idle; wake on any input
+9. Webhooks and Home Assistant/MQTT actions
+10. Plugin API: action providers as separate processes or scripts
 
 ## Known environment notes
 
