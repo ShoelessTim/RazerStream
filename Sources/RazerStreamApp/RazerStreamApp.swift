@@ -49,6 +49,13 @@ struct RazerStreamApp: App {
         }
         .windowResizability(.contentSize)
 
+        Settings {
+            SettingsView()
+                .environmentObject(store)
+                .environmentObject(deviceManager)
+                .preferredColorScheme(colorScheme)
+        }
+
         MenuBarExtra {
             Text(deviceManager.connected
                  ? "Connected — fw \(deviceManager.firmware)"
@@ -60,6 +67,16 @@ struct RazerStreamApp: App {
                 Text("Dark").tag(2)
             }
             Divider()
+            Button("Show RazerStream") {
+                NSApp.activate(ignoringOtherApps: true)
+                if let w = NSApp.windows.first(where: { $0.title == "RazerStream" }) {
+                    w.makeKeyAndOrderFront(nil)
+                }
+            }
+            Button("Test Device (LED sweep)") {
+                deviceManager.testDevice()
+            }
+            .disabled(!deviceManager.connected)
             Button("Push Page to Device") {
                 deviceManager.pushCurrentPage()
             }

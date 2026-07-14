@@ -275,6 +275,7 @@ struct ActionEditor: View {
         case gotoPage = "Go to Page"
         case nextPage = "Next Page"
         case prevPage = "Previous Page"
+        case showApp = "Show RazerStream"
     }
 
     @State private var kind: Kind = .none
@@ -347,6 +348,7 @@ struct ActionEditor: View {
         case .gotoPage(let p):     kind = .gotoPage;   pageIndex = p
         case .nextPage:            kind = .nextPage
         case .prevPage:            kind = .prevPage
+        case .showApp:             kind = .showApp
         }
     }
 
@@ -367,6 +369,7 @@ struct ActionEditor: View {
         case .gotoPage:   action = .gotoPage(pageIndex)
         case .nextPage:   action = .nextPage
         case .prevPage:   action = .prevPage
+        case .showApp:    action = .showApp
         }
     }
 }

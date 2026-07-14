@@ -83,7 +83,7 @@ final class DeviceManager: ObservableObject {
         switch event {
         case .connected:
             connected = true
-            pushCurrentPage()
+            pushCurrentPage(choreography: true)
 
         case .disconnected:
             connected = false
@@ -223,15 +223,22 @@ final class DeviceManager: ObservableObject {
 
     // MARK: - Push current page to device
 
-    func pushCurrentPage() {
+    /// Draws the current page onto the device; tiles, knob strips, and button
+    /// LEDs. Pass choreography: true on connect to run the loading sweep plus
+    /// an LED cascade as a hardware self-test.
+    func pushCurrentPage(choreography: Bool = false) {
         guard let device, let store else { return }
         let profile = store.activeProfile
         let page = store.currentPage
 
-        // Pace writes: blasting framebuffers back-to-back overruns the
-        // device's serial buffer and nothing renders.
+        // Pace writes; blasting framebuffers back to back overruns the
+        // device's serial buffer and nothing renders
         pushTask?.cancel()
         pushTask = Task {
+            if choreography {
+                await self.runLEDCascade(device: device, page: page)
+            }
+
             try? device.send(.setBrightness(profile.brightness))
             try? await Task.sleep(for: .milliseconds(60))
 
@@ -242,7 +249,7 @@ final class DeviceManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
-            // Knob zones: 0–2 left strip (x=0), 3–5 right strip (x=420)
+            // Knob zones; 0 to 2 left strip (x=0), 3 to 5 right strip (x=420)
             for (i, knob) in page.knobs.enumerated() {
                 if Task.isCancelled { return }
                 let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
@@ -254,14 +261,47 @@ final class DeviceManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
-            // Physical button LEDs (device IDs 7–14). Index 0 / ID 7 is the
-            // status light — the device manages it, never write it.
+            // Physical button LEDs (device IDs 7 to 14). Index 0 / ID 7 is the
+            // status light; the device manages it, never write it.
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
                 let (r, g, b) = Self.rgb(fromHex: button.ledHex)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
+        }
+    }
+
+    /// A color wave across buttons 2 to 8; connect feedback and LED self-test.
+    /// Runs on demand from the menu bar too.
+    func testDevice() {
+        guard let device, let store else { return }
+        let page = store.currentPage
+        pushTask?.cancel()
+        pushTask = Task { await self.runLEDCascade(device: device, page: page) }
+    }
+
+    private func runLEDCascade(device: RazerStreamDevice, page: Page) async {
+        // Rainbow sweep out across buttons 2 to 8 (device IDs 9 to 14; skip
+        // ID 7 status light and ID 8 which is button 1's neighbor handling)
+        let wave: [(UInt8, UInt8, UInt8)] = [
+            (255, 40, 40), (255, 150, 30), (240, 230, 40), (60, 210, 90),
+            (50, 190, 220), (60, 90, 240), (170, 70, 230),
+        ]
+        // Light each button in turn
+        for i in 1..<8 {
+            if Task.isCancelled { return }
+            let (r, g, b) = wave[(i - 1) % wave.count]
+            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+            try? await Task.sleep(for: .milliseconds(70))
+        }
+        try? await Task.sleep(for: .milliseconds(180))
+        // Return each to its configured color
+        for i in 1..<8 {
+            if Task.isCancelled { return }
+            let (r, g, b) = Self.rgb(fromHex: page.buttons[i].ledHex)
+            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+            try? await Task.sleep(for: .milliseconds(30))
         }
     }
 

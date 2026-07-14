@@ -18,6 +18,7 @@ enum ControlAction: Codable, Equatable {
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
+    case showApp                      // bring RazerStream front and center
 
     var displayName: String {
         switch self {
@@ -36,6 +37,7 @@ enum ControlAction: Codable, Equatable {
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"
+        case .showApp:              return "Show RazerStream"
         }
     }
 }

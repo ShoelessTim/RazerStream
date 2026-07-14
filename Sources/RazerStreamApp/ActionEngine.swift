@@ -62,6 +62,16 @@ enum ActionEngine {
         case .gotoPage(let p): pageHandler(.goto(p))
         case .nextPage:        pageHandler(.next)
         case .prevPage:        pageHandler(.prev)
+
+        case .showApp:
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                // Center and front the main window; skip the help window
+                if let window = NSApp.windows.first(where: { $0.title == "RazerStream" }) {
+                    window.center()
+                    window.makeKeyAndOrderFront(nil)
+                }
+            }
         }
     }
 
