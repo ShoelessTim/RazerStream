@@ -293,11 +293,12 @@ final class DeviceManager: ObservableObject {
             try? device.send(.setBrightness(10))
             try? await Task.sleep(for: .milliseconds(40))
 
-            // Paint the screen test pattern across all 12 tiles
+            // Paint the screen test pattern across all 12 tiles; paced slow
+            // enough that you can watch each tile land in turn
             for i in 0..<page.tiles.count {
                 if Task.isCancelled { return }
                 try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.renderTestTile(index: i)))
-                try? await Task.sleep(for: .milliseconds(45))
+                try? await Task.sleep(for: .milliseconds(90))
             }
             // Test cards on the six knob strips
             for i in 0..<page.knobs.count {
@@ -308,7 +309,7 @@ final class DeviceManager: ObservableObject {
                     display: .center, x: x, y: y, w: 60, h: 90,
                     rgb565: TileRenderer.renderKnobTestZone(index: i)
                 ))
-                try? await Task.sleep(for: .milliseconds(45))
+                try? await Task.sleep(for: .milliseconds(90))
             }
 
             // LED rainbow sweep over the top of the screen pattern
