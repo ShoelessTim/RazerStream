@@ -30,6 +30,17 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - A Razer Stream Controller (USB VID 0x1532, PID 0x0D06)
 - Xcode 16 or later to build
 
+## Install (no building required)
+
+1. Download `RazerStream-vX.Y.Z.zip` from the
+   [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
+2. Unzip and drag `RazerStream.app` into `/Applications`
+3. First launch only: **right-click the app, choose Open, then Open again** in
+   the dialog. macOS shows that warning because the app is community-signed
+   rather than notarized; it is required once, never again.
+4. Grant the Accessibility permission when prompted; keystrokes and media keys
+   need it.
+
 ## Build and run
 
 ```sh
