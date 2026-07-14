@@ -5,6 +5,7 @@ import Foundation
 enum ControlAction: Codable, Equatable {
     case none
     case launchApp(path: String)
+    case openURL(String)
     case shellCommand(String)
     case appleScript(String)
     case keystroke(String)            // e.g. "cmd+shift+k", "f5", "space"
@@ -22,6 +23,7 @@ enum ControlAction: Codable, Equatable {
         switch self {
         case .none:                 return "None"
         case .launchApp(let path):  return "Open \((path as NSString).lastPathComponent)"
+        case .openURL(let url):     return "Open \(url)"
         case .shellCommand:         return "Shell command"
         case .appleScript:          return "AppleScript"
         case .keystroke(let k):     return "Keys: \(k)"

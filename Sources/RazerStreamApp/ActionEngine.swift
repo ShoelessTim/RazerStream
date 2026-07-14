@@ -22,6 +22,15 @@ enum ActionEngine {
                 if let error { NSLog("launchApp failed: \(error)") }
             }
 
+        case .openURL(let urlString):
+            // Default to https when the scheme is missing
+            let full = urlString.contains("://") ? urlString : "https://\(urlString)"
+            if let url = URL(string: full) {
+                NSWorkspace.shared.open(url)
+            } else {
+                NSLog("openURL: invalid URL \(urlString)")
+            }
+
         case .shellCommand(let cmd):
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/zsh")

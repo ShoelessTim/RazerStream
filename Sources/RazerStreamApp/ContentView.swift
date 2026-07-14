@@ -262,6 +262,7 @@ struct ActionEditor: View {
     enum Kind: String, CaseIterable {
         case none = "None"
         case launchApp = "Open App"
+        case openURL = "Open URL"
         case shell = "Shell Command"
         case script = "AppleScript"
         case keystroke = "Keystroke"
@@ -304,6 +305,8 @@ struct ActionEditor: View {
                         }
                     }
                 }
+            case .openURL:
+                TextField("https://…", text: $param).onChange(of: param) { syncOut() }
             case .shell:
                 TextField("Command", text: $param).onChange(of: param) { syncOut() }
             case .script:
@@ -331,6 +334,7 @@ struct ActionEditor: View {
         switch action {
         case .none:                kind = .none;       param = ""
         case .launchApp(let p):    kind = .launchApp;  param = p
+        case .openURL(let u):      kind = .openURL;    param = u
         case .shellCommand(let c): kind = .shell;      param = c
         case .appleScript(let s):  kind = .script;     param = s
         case .keystroke(let k):    kind = .keystroke;  param = k
@@ -350,6 +354,7 @@ struct ActionEditor: View {
         switch kind {
         case .none:       action = .none
         case .launchApp:  action = .launchApp(path: param)
+        case .openURL:    action = .openURL(param)
         case .shell:      action = .shellCommand(param)
         case .script:     action = .appleScript(param)
         case .keystroke:  action = .keystroke(param)
