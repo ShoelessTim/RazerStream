@@ -184,7 +184,7 @@ struct ContentView: View {
                             Image(systemName: "dial.medium").font(.system(size: 16))
                                 .foregroundStyle(.secondary)
                         }
-                        Text(knob.label.isEmpty ? "K\(i)" : knob.label)
+                        Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
                             .font(.system(size: 9))
                             .lineLimit(1)
                     }
@@ -564,7 +564,7 @@ struct KnobInspector: View {
 
     var body: some View {
         Form {
-            Section("Knob \(knobIndex) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
+            Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
                 TextField("Label", text: $label)
                 HStack {
                     if !sfSymbol.isEmpty {
