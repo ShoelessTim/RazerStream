@@ -86,11 +86,13 @@ final class DeviceManager: ObservableObject {
 
         case .buttonPress(let id, let pressed):
             guard pressed else { return }
-            // IDs 1–8 are physical buttons; 9–14 are knob presses
-            if id >= 1 && id <= 8 {
-                run(page.buttons[id - 1].action)
-            } else if id >= 9 && id <= 14 {
-                run(page.knobs[id - 9].press)
+            // Device enumerates knob presses first: IDs 1–3 left knobs
+            // top→bottom, 4–6 right knobs top→bottom, then 7–14 are the
+            // eight physical buttons left→right. (Verified on hardware.)
+            if id >= 1 && id <= 6 {
+                run(page.knobs[id - 1].press)
+            } else if id >= 7 && id <= 14 {
+                run(page.buttons[id - 7].action)
             }
 
         case .knobRotate(let id, let delta):
