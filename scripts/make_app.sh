@@ -51,13 +51,22 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# Prefer a real signing identity when one exists; a stable identity keeps the
-# Accessibility grant valid across rebuilds. Ad hoc signing changes identity
-# every build, which forces a re-grant after each update.
-IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/RazerStream Dev|Apple Development/ {print $2; exit}')
-if [ -n "$IDENTITY" ]; then
-    echo "Signing with: $IDENTITY"
-    codesign --force --sign "$IDENTITY" "$APP"
+# Signing identity preference:
+#  1. Developer ID Application; distributable and notarizable, stable grant
+#  2. Apple Development or the local self-signed cert; stable grant, dev only
+#  3. ad hoc; grant resets every build
+ENTITLEMENTS="$ROOT/scripts/RazerStream.entitlements"
+DEVID=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/ {print $2; exit}')
+DEVCERT=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/RazerStream Dev|Apple Development/ {print $2; exit}')
+
+if [ -n "$DEVID" ]; then
+    echo "Signing with Developer ID (hardened runtime): $DEVID"
+    codesign --force --deep --options runtime \
+        --entitlements "$ENTITLEMENTS" \
+        --sign "$DEVID" "$APP"
+elif [ -n "$DEVCERT" ]; then
+    echo "Signing with: $DEVCERT"
+    codesign --force --sign "$DEVCERT" "$APP"
 else
     echo "Signing ad hoc; Accessibility will need a re-grant after each update"
     codesign --force --sign - "$APP"
@@ -65,10 +74,31 @@ fi
 
 echo "Done: $APP"
 
-# Pass "install" as the second argument to update /Applications
-if [ "$2" = "install" ]; then
+# Pass "install" to update /Applications
+if [ "$2" = "install" ] || [ "$3" = "install" ]; then
     echo "Installing to /Applications…"
     rm -rf "/Applications/RazerStream.app"
     cp -R "$APP" "/Applications/RazerStream.app"
     echo "Installed: /Applications/RazerStream.app"
+fi
+
+# Pass "notarize" to notarize, staple, and zip for distribution. Requires a
+# Developer ID signature and stored credentials under the profile name below.
+if [ "$2" = "notarize" ] || [ "$3" = "notarize" ]; then
+    if [ -z "$DEVID" ]; then
+        echo "Cannot notarize; no Developer ID Application certificate found."
+        exit 1
+    fi
+    NOTARY_PROFILE="razerstream-notary"
+    ZIP="$ROOT/dist/RazerStream.zip"
+    echo "Zipping for notarization…"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "Submitting to Apple notary service (this can take a few minutes)…"
+    xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+    echo "Stapling ticket…"
+    xcrun stapler staple "$APP"
+    # Re-zip the stapled app for release upload
+    rm -f "$ZIP"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "Notarized and stapled: $ZIP"
 fi
