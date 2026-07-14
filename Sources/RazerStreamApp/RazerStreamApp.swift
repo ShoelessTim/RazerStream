@@ -37,6 +37,30 @@ struct RazerStreamApp: App {
                 }
         }
         .commands {
+            CommandMenu("Device") {
+                Button("Show RazerStream") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    if let w = NSApp.windows.first(where: { $0.title == "RazerStream" }) {
+                        w.makeKeyAndOrderFront(nil)
+                    }
+                }
+                .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
+
+                Button("Test Device (LED Sweep)") {
+                    deviceManager.testDevice()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+                .disabled(!deviceManager.connected)
+
+                Button("Redraw Page on Device") {
+                    deviceManager.pushCurrentPage()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!deviceManager.connected)
+            }
+
             CommandGroup(replacing: .help) {
                 Button("RazerStream Help") { openWindow(id: "help") }
                     .keyboardShortcut("?", modifiers: .command)

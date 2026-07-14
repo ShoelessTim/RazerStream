@@ -29,6 +29,25 @@ struct ContentView: View {
             statusBar
         }
         .frame(minWidth: 900, minHeight: 560)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    deviceManager.testDevice()
+                } label: {
+                    Label("Test Device", systemImage: "wand.and.rays")
+                }
+                .disabled(!deviceManager.connected)
+                .help("Run the LED sweep self-test")
+
+                Button {
+                    deviceManager.pushCurrentPage()
+                } label: {
+                    Label("Redraw", systemImage: "arrow.clockwise")
+                }
+                .disabled(!deviceManager.connected)
+                .help("Redraw the current page on the device")
+            }
+        }
     }
 
     // MARK: - Status bar; lives at the bottom of the window

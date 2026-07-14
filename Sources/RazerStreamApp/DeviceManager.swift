@@ -292,26 +292,27 @@ final class DeviceManager: ObservableObject {
     }
 
     private func runLEDCascade(device: RazerStreamDevice, page: Page) async {
-        // Rainbow sweep out across buttons 2 to 8 (device IDs 9 to 14; skip
-        // ID 7 status light and ID 8 which is button 1's neighbor handling)
         let wave: [(UInt8, UInt8, UInt8)] = [
             (255, 40, 40), (255, 150, 30), (240, 230, 40), (60, 210, 90),
             (50, 190, 220), (60, 90, 240), (170, 70, 230),
         ]
-        // Light each button in turn
-        for i in 1..<8 {
-            if Task.isCancelled { return }
-            let (r, g, b) = wave[(i - 1) % wave.count]
-            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
-            try? await Task.sleep(for: .milliseconds(70))
+
+        // Two visible passes of the rainbow marching across buttons 2 to 8,
+        // slow enough to actually watch; then settle to configured colors
+        for pass in 0..<2 {
+            for i in 1..<8 {
+                if Task.isCancelled { return }
+                let (r, g, b) = wave[(i - 1 + pass) % wave.count]
+                try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+                try? await Task.sleep(for: .milliseconds(160))
+            }
         }
-        try? await Task.sleep(for: .milliseconds(180))
-        // Return each to its configured color
+        try? await Task.sleep(for: .milliseconds(300))
         for i in 1..<8 {
             if Task.isCancelled { return }
             let (r, g, b) = Self.rgb(fromHex: page.buttons[i].ledHex)
             try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
-            try? await Task.sleep(for: .milliseconds(30))
+            try? await Task.sleep(for: .milliseconds(50))
         }
     }
 
