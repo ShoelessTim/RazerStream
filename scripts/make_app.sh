@@ -55,3 +55,11 @@ PLIST
 codesign --force --deep --sign - "$APP"
 
 echo "Done: $APP"
+
+# Pass "install" as the second argument to update /Applications
+if [ "$2" = "install" ]; then
+    echo "Installing to /Applications…"
+    rm -rf "/Applications/RazerStream.app"
+    cp -R "$APP" "/Applications/RazerStream.app"
+    echo "Installed: /Applications/RazerStream.app"
+fi
