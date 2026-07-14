@@ -8,6 +8,9 @@ enum ControlAction: Codable, Equatable {
     case shellCommand(String)
     case appleScript(String)
     case keystroke(String)            // e.g. "cmd+shift+k", "f5", "space"
+    case mediaPlayPause
+    case mediaNext
+    case mediaPrevious
     case volumeUp
     case volumeDown
     case volumeMute
@@ -22,6 +25,9 @@ enum ControlAction: Codable, Equatable {
         case .shellCommand:         return "Shell command"
         case .appleScript:          return "AppleScript"
         case .keystroke(let k):     return "Keys: \(k)"
+        case .mediaPlayPause:       return "Play / Pause"
+        case .mediaNext:            return "Next Track"
+        case .mediaPrevious:        return "Previous Track"
         case .volumeUp:             return "Volume +"
         case .volumeDown:           return "Volume −"
         case .volumeMute:           return "Mute"
@@ -32,14 +38,53 @@ enum ControlAction: Codable, Equatable {
     }
 }
 
+// MARK: - Control behavior modes
+
+enum ControlMode: Codable, Equatable {
+    case tap                 // fire action on press (default)
+    case toggle              // alternate: action (on) / releaseAction (off), visual state
+    case momentary           // action on press, releaseAction on release
+    case shiftPage(Int)      // hold: show page N; release: return
+}
+
 // MARK: - Per-control configuration
 
 struct TileConfig: Codable, Equatable {
     var label: String = ""
     var colorHex: String = "333333"
     var sfSymbol: String? = nil       // SF Symbols icon name (built-in library)
+    var altSymbol: String? = nil      // icon shown while a toggle is ON
     var imagePath: String? = nil      // custom image file (overrides symbol)
     var action: ControlAction = .none
+    var releaseAction: ControlAction = .none   // toggle-off / momentary-release
+    var mode: ControlMode = .tap
+
+    init(label: String = "", colorHex: String = "333333", sfSymbol: String? = nil,
+         altSymbol: String? = nil, imagePath: String? = nil,
+         action: ControlAction = .none, releaseAction: ControlAction = .none,
+         mode: ControlMode = .tap) {
+        self.label = label
+        self.colorHex = colorHex
+        self.sfSymbol = sfSymbol
+        self.altSymbol = altSymbol
+        self.imagePath = imagePath
+        self.action = action
+        self.releaseAction = releaseAction
+        self.mode = mode
+    }
+
+    // Tolerant decoding so profiles saved by older builds keep loading
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "333333"
+        sfSymbol = try c.decodeIfPresent(String.self, forKey: .sfSymbol)
+        altSymbol = try c.decodeIfPresent(String.self, forKey: .altSymbol)
+        imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
+        releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
+        mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap
+    }
 }
 
 struct KnobConfig: Codable, Equatable {
@@ -52,7 +97,25 @@ struct KnobConfig: Codable, Equatable {
 
 struct ButtonConfig: Codable, Equatable {
     var action: ControlAction = .none
+    var releaseAction: ControlAction = .none
+    var mode: ControlMode = .tap
     var ledHex: String = "000000"     // LED color; button 0 is the status light
+
+    init(action: ControlAction = .none, releaseAction: ControlAction = .none,
+         mode: ControlMode = .tap, ledHex: String = "000000") {
+        self.action = action
+        self.releaseAction = releaseAction
+        self.mode = mode
+        self.ledHex = ledHex
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
+        releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
+        mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap
+        ledHex = try c.decodeIfPresent(String.self, forKey: .ledHex) ?? "000000"
+    }
 }
 
 // MARK: - Page: one full device layout

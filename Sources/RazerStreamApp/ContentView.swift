@@ -231,6 +231,9 @@ struct ActionEditor: View {
         case shell = "Shell Command"
         case script = "AppleScript"
         case keystroke = "Keystroke"
+        case mediaPlayPause = "Play / Pause"
+        case mediaNext = "Next Track"
+        case mediaPrevious = "Previous Track"
         case volumeUp = "Volume +"
         case volumeDown = "Volume −"
         case volumeMute = "Mute"
@@ -297,6 +300,9 @@ struct ActionEditor: View {
         case .shellCommand(let c): kind = .shell;      param = c
         case .appleScript(let s):  kind = .script;     param = s
         case .keystroke(let k):    kind = .keystroke;  param = k
+        case .mediaPlayPause:      kind = .mediaPlayPause
+        case .mediaNext:           kind = .mediaNext
+        case .mediaPrevious:       kind = .mediaPrevious
         case .volumeUp:            kind = .volumeUp
         case .volumeDown:          kind = .volumeDown
         case .volumeMute:          kind = .volumeMute
@@ -313,6 +319,9 @@ struct ActionEditor: View {
         case .shell:      action = .shellCommand(param)
         case .script:     action = .appleScript(param)
         case .keystroke:  action = .keystroke(param)
+        case .mediaPlayPause: action = .mediaPlayPause
+        case .mediaNext:      action = .mediaNext
+        case .mediaPrevious:  action = .mediaPrevious
         case .volumeUp:   action = .volumeUp
         case .volumeDown: action = .volumeDown
         case .volumeMute: action = .volumeMute
@@ -423,8 +432,11 @@ struct TileInspector: View {
     @State private var label = ""
     @State private var color = Color(hex: "333333")
     @State private var sfSymbol = ""
+    @State private var altSymbol = ""
     @State private var imagePath = ""
     @State private var action: ControlAction = .none
+    @State private var releaseAction: ControlAction = .none
+    @State private var mode: ControlMode = .tap
     @State private var showSymbolPicker = false
 
     var body: some View {
@@ -453,8 +465,9 @@ struct TileInspector: View {
                     }
                 }
             }
-            Section("Action") {
-                ActionEditor(title: "On tap", action: $action)
+            Section("Behavior") {
+                ModeEditor(mode: $mode, action: $action,
+                           releaseAction: $releaseAction, altSymbol: $altSymbol)
             }
             Button("Apply") { apply() }
                 .keyboardShortcut(.return)
@@ -472,8 +485,11 @@ struct TileInspector: View {
         label = tile.label
         color = Color(hex: tile.colorHex)
         sfSymbol = tile.sfSymbol ?? ""
+        altSymbol = tile.altSymbol ?? ""
         imagePath = tile.imagePath ?? ""
         action = tile.action
+        releaseAction = tile.releaseAction
+        mode = tile.mode
     }
 
     private func apply() {
@@ -482,8 +498,11 @@ struct TileInspector: View {
                 label: label,
                 colorHex: color.hexString,
                 sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
+                altSymbol: altSymbol.isEmpty ? nil : altSymbol,
                 imagePath: imagePath.isEmpty ? nil : imagePath,
-                action: action
+                action: action,
+                releaseAction: releaseAction,
+                mode: mode
             )
         }
         deviceManager.pushCurrentPage()
@@ -566,6 +585,8 @@ struct ButtonInspector: View {
     let buttonIndex: Int
 
     @State private var action: ControlAction = .none
+    @State private var releaseAction: ControlAction = .none
+    @State private var mode: ControlMode = .tap
     @State private var ledColor = Color.black
 
     private var isStatusLight: Bool { buttonIndex == 0 }
@@ -573,7 +594,8 @@ struct ButtonInspector: View {
     var body: some View {
         Form {
             Section("Physical Button \(buttonIndex + 1)") {
-                ActionEditor(title: "On press", action: $action)
+                ModeEditor(mode: $mode, action: $action,
+                           releaseAction: $releaseAction, altSymbol: nil)
                 if isStatusLight {
                     Label("LED is the device status light — managed by the device",
                           systemImage: "info.circle")
@@ -594,6 +616,8 @@ struct ButtonInspector: View {
     private func loadCurrent() {
         let button = store.currentPage.buttons[buttonIndex]
         action = button.action
+        releaseAction = button.releaseAction
+        mode = button.mode
         ledColor = Color(hex: button.ledHex)
     }
 
@@ -601,6 +625,8 @@ struct ButtonInspector: View {
         store.updateCurrentPage { page in
             page.buttons[buttonIndex] = ButtonConfig(
                 action: action,
+                releaseAction: releaseAction,
+                mode: mode,
                 ledHex: isStatusLight ? "000000" : ledColor.hexString
             )
         }

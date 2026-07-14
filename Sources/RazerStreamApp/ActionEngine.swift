@@ -40,6 +40,10 @@ enum ActionEngine {
         case .keystroke(let combo):
             sendKeystroke(combo)
 
+        case .mediaPlayPause: sendMediaKey(16)   // NX_KEYTYPE_PLAY
+        case .mediaNext:      sendMediaKey(19)   // NX_KEYTYPE_FAST
+        case .mediaPrevious:  sendMediaKey(20)   // NX_KEYTYPE_REWIND
+
         case .volumeUp:
             runAppleScript("set volume output volume ((output volume of (get volume settings)) + 6)")
         case .volumeDown:
@@ -99,6 +103,23 @@ enum ActionEngine {
         up?.flags = flags
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
+    }
+
+    /// Posts a hardware media key (play/pause, next, previous) system event.
+    private static func sendMediaKey(_ key: Int32) {
+        func post(down: Bool) {
+            let flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
+            let data1 = Int((key << 16) | ((down ? 0xA : 0xB) << 8))
+            if let event = NSEvent.otherEvent(
+                with: .systemDefined, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: 0, context: nil,
+                subtype: 8, data1: data1, data2: -1
+            ) {
+                event.cgEvent?.post(tap: .cghidEventTap)
+            }
+        }
+        post(down: true)
+        post(down: false)
     }
 
     // US-layout virtual key codes (Carbon kVK_*)

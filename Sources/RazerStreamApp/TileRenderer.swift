@@ -9,7 +9,7 @@ enum TileRenderer {
 
     // MARK: - Tiles (90×90)
 
-    static func render(_ tile: TileConfig) -> Data {
+    static func render(_ tile: TileConfig, toggledOn: Bool = false) -> Data {
         let size = RazerStreamController.buttonSize
         guard let ctx = makeContext(width: size, height: size) else {
             return Data(count: size * size * 2)
@@ -18,22 +18,32 @@ enum TileRenderer {
         ctx.setFillColor(color(fromHex: tile.colorHex))
         ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
 
+        // Toggles that are ON use the alternate icon when set
+        let effectiveSymbol = (toggledOn && tile.altSymbol != nil) ? tile.altSymbol : tile.sfSymbol
+
         // Custom image beats SF symbol; both centered
         if let path = tile.imagePath,
            let nsImage = NSImage(contentsOfFile: path),
            let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             drawFitted(cgImage, in: ctx, canvas: size, inset: 0)
-        } else if let symbol = tile.sfSymbol,
+        } else if let symbol = effectiveSymbol,
                   let cgImage = symbolImage(symbol, pointSize: 44) {
             drawFitted(cgImage, in: ctx, canvas: size, inset: 18)
         }
 
         if !tile.label.isEmpty {
             // Label sits at the bottom when there's an icon, centered otherwise
-            let hasIcon = tile.imagePath != nil || tile.sfSymbol != nil
+            let hasIcon = tile.imagePath != nil || effectiveSymbol != nil
             drawText(tile.label, in: ctx, canvas: size,
                      fontSize: hasIcon ? 12 : 16,
                      yOffset: hasIcon ? 6 : nil)
+        }
+
+        // ON-state ring for toggle tiles
+        if toggledOn {
+            ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.9))
+            ctx.setLineWidth(4)
+            ctx.stroke(CGRect(x: 2, y: 2, width: size - 4, height: size - 4))
         }
 
         return rgb565(from: ctx, width: size, height: size)

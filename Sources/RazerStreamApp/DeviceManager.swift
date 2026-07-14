@@ -18,6 +18,14 @@ final class DeviceManager: ObservableObject {
     private var pushTask: Task<Void, Never>?
     weak var store: ProfileStore?
 
+    // Runtime control state (not persisted)
+    @Published var toggleStates: [String: Bool] = [:]   // "p0-t3" → on/off
+    private var activeTouches: [Int: Int] = [:]          // touchID → tile index
+    private var shiftReturnPage: Int?
+
+    func toggleKey(tile: Int) -> String { "p\(store?.currentPageIndex ?? 0)-t\(tile)" }
+    func toggleKey(button: Int) -> String { "p\(store?.currentPageIndex ?? 0)-b\(button)" }
+
     func start(store: ProfileStore) {
         self.store = store
         connectLoop()
@@ -85,14 +93,13 @@ final class DeviceManager: ObservableObject {
         case .serialNumber(let s):    serial = s
 
         case .buttonPress(let id, let pressed):
-            guard pressed else { return }
             // Device enumerates knob presses first: IDs 1–3 left knobs
             // top→bottom, 4–6 right knobs top→bottom, then 7–14 are the
             // eight physical buttons left→right. (Verified on hardware.)
             if id >= 1 && id <= 6 {
-                run(page.knobs[id - 1].press)
+                if pressed { run(page.knobs[id - 1].press) }
             } else if id >= 7 && id <= 14 {
-                run(page.buttons[id - 7].action)
+                handleButton(index: id - 7, pressed: pressed, page: page)
             }
 
         case .knobRotate(let id, let delta):
@@ -100,17 +107,106 @@ final class DeviceManager: ObservableObject {
             let knob = page.knobs[id - 1]
             run(delta > 0 ? knob.clockwise : knob.counterClockwise)
 
-        case .touchStart(let x, let y, _):
+        case .touchStart(let x, let y, let touchID):
+            // Only fire on the first event of this touch (device streams
+            // touchStart repeatedly while a finger moves)
+            guard activeTouches[touchID] == nil else { return }
             let col = (x - RazerStreamController.centerXOffset) / RazerStreamController.buttonSize
             let row = y / RazerStreamController.buttonSize
             let cols = RazerStreamController.buttonColumns
-            if col >= 0 && col < cols && row >= 0 && row < RazerStreamController.buttonRows {
-                run(page.tiles[row * cols + col].action)
+            guard col >= 0, col < cols, row >= 0, row < RazerStreamController.buttonRows else { return }
+            let idx = row * cols + col
+            activeTouches[touchID] = idx
+            handleTilePress(index: idx, page: page)
+
+        case .touchEnd(_, _, let touchID):
+            if let idx = activeTouches.removeValue(forKey: touchID) {
+                handleTileRelease(index: idx, page: page)
             }
 
         default:
             break
         }
+    }
+
+    // MARK: - Behavior modes
+
+    private func handleTilePress(index: Int, page: Page) {
+        let tile = page.tiles[index]
+        switch tile.mode {
+        case .tap, .momentary:
+            run(tile.action)
+        case .toggle:
+            let key = toggleKey(tile: index)
+            let nowOn = !(toggleStates[key] ?? false)
+            toggleStates[key] = nowOn
+            run(nowOn ? tile.action : tile.releaseAction)
+            pushTile(index)   // redraw with alt icon / state ring
+        case .shiftPage(let target):
+            shiftReturnPage = store?.currentPageIndex
+            store?.goToPage(target)
+            pushCurrentPage()
+        }
+    }
+
+    private func handleTileRelease(index: Int, page: Page) {
+        let tile = page.tiles[index]
+        switch tile.mode {
+        case .momentary:
+            run(tile.releaseAction)
+        case .shiftPage:
+            returnFromShift()
+        default:
+            break
+        }
+    }
+
+    private func handleButton(index: Int, pressed: Bool, page: Page) {
+        let button = page.buttons[index]
+        switch button.mode {
+        case .tap:
+            if pressed { run(button.action) }
+        case .momentary:
+            run(pressed ? button.action : button.releaseAction)
+        case .toggle:
+            guard pressed else { return }
+            let key = toggleKey(button: index)
+            let nowOn = !(toggleStates[key] ?? false)
+            toggleStates[key] = nowOn
+            run(nowOn ? button.action : button.releaseAction)
+            // LED shows state: configured color when on, off when off
+            if index > 0, let device {
+                let (r, g, b) = nowOn ? Self.rgb(fromHex: button.ledHex) : (0, 0, 0)
+                try? device.send(.setButtonColor(button: 7 + index, r: r, g: g, b: b))
+            }
+        case .shiftPage(let target):
+            if pressed {
+                shiftReturnPage = store?.currentPageIndex
+                store?.goToPage(target)
+                pushCurrentPage()
+            } else {
+                returnFromShift()
+            }
+        }
+    }
+
+    private func returnFromShift() {
+        if let back = shiftReturnPage {
+            shiftReturnPage = nil
+            store?.goToPage(back)
+            pushCurrentPage()
+        }
+    }
+
+    /// Redraw a single tile (used when a toggle flips state).
+    private func pushTile(_ index: Int) {
+        guard let device, let store else { return }
+        let tile = store.currentPage.tiles[index]
+        let isOn = toggleStates[toggleKey(tile: index)] ?? false
+        try? device.send(.setButtonImage(
+            button: index,
+            rgb565: TileRenderer.render(tile, toggledOn: isOn)
+        ))
     }
 
     private func run(_ action: ControlAction) {
@@ -141,7 +237,8 @@ final class DeviceManager: ObservableObject {
 
             for (i, tile) in page.tiles.enumerated() {
                 if Task.isCancelled { return }
-                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile)))
+                let isOn = toggleStates[toggleKey(tile: i)] ?? false
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, toggledOn: isOn)))
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
