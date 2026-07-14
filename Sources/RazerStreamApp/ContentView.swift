@@ -267,7 +267,8 @@ struct ActionEditor: View {
             case .script:
                 TextField("AppleScript", text: $param).onChange(of: param) { syncOut() }
             case .keystroke:
-                TextField("e.g. cmd+shift+k", text: $param).onChange(of: param) { syncOut() }
+                KeystrokeRecorder(combo: $param)
+                    .onChange(of: param) { syncOut() }
             case .gotoPage:
                 Picker("", selection: $pageIndex) {
                     ForEach(0..<store.activeProfile.pages.count, id: \.self) { i in
