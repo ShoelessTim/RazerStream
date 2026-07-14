@@ -176,6 +176,11 @@ struct ContentView: View {
                         Circle()
                             .fill(Color(hex: "222228"))
                             .frame(width: 36, height: 36)
+                        // LED ring: green status light on button 1, configured color elsewhere
+                        Circle()
+                            .stroke(i == 0 ? Color.green : Color(hex: page.buttons[i].ledHex),
+                                    lineWidth: 2)
+                            .frame(width: 30, height: 30)
                         if page.buttons[i].action != .none {
                             Circle().fill(Color.accentColor).frame(width: 8, height: 8)
                                 .offset(y: 12)
@@ -416,7 +421,7 @@ struct TileInspector: View {
     let tileIndex: Int
 
     @State private var label = ""
-    @State private var colorHex = "333333"
+    @State private var color = Color(hex: "333333")
     @State private var sfSymbol = ""
     @State private var imagePath = ""
     @State private var action: ControlAction = .none
@@ -426,7 +431,7 @@ struct TileInspector: View {
         Form {
             Section("Tile \(tileIndex) — \(store.currentPage.name)") {
                 TextField("Label", text: $label)
-                TextField("Color (hex)", text: $colorHex)
+                ColorPicker("Background", selection: $color, supportsOpacity: false)
                 HStack {
                     if !sfSymbol.isEmpty {
                         Image(systemName: sfSymbol)
@@ -465,7 +470,7 @@ struct TileInspector: View {
     private func loadCurrent() {
         let tile = store.currentPage.tiles[tileIndex]
         label = tile.label
-        colorHex = tile.colorHex
+        color = Color(hex: tile.colorHex)
         sfSymbol = tile.sfSymbol ?? ""
         imagePath = tile.imagePath ?? ""
         action = tile.action
@@ -475,7 +480,7 @@ struct TileInspector: View {
         store.updateCurrentPage { page in
             page.tiles[tileIndex] = TileConfig(
                 label: label,
-                colorHex: colorHex,
+                colorHex: color.hexString,
                 sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
                 imagePath: imagePath.isEmpty ? nil : imagePath,
                 action: action
@@ -561,11 +566,22 @@ struct ButtonInspector: View {
     let buttonIndex: Int
 
     @State private var action: ControlAction = .none
+    @State private var ledColor = Color.black
+
+    private var isStatusLight: Bool { buttonIndex == 0 }
 
     var body: some View {
         Form {
             Section("Physical Button \(buttonIndex + 1)") {
                 ActionEditor(title: "On press", action: $action)
+                if isStatusLight {
+                    Label("LED is the device status light — managed by the device",
+                          systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ColorPicker("LED color", selection: $ledColor, supportsOpacity: false)
+                }
             }
             Button("Apply") { apply() }
                 .keyboardShortcut(.return)
@@ -576,12 +592,17 @@ struct ButtonInspector: View {
     }
 
     private func loadCurrent() {
-        action = store.currentPage.buttons[buttonIndex].action
+        let button = store.currentPage.buttons[buttonIndex]
+        action = button.action
+        ledColor = Color(hex: button.ledHex)
     }
 
     private func apply() {
         store.updateCurrentPage { page in
-            page.buttons[buttonIndex] = ButtonConfig(action: action)
+            page.buttons[buttonIndex] = ButtonConfig(
+                action: action,
+                ledHex: isStatusLight ? "000000" : ledColor.hexString
+            )
         }
         deviceManager.pushCurrentPage()
     }
@@ -600,5 +621,14 @@ extension Color {
             green: Double((v >> 8) & 0xFF) / 255,
             blue: Double(v & 0xFF) / 255
         )
+    }
+
+    /// "RRGGBB" for storage; sRGB-converted.
+    var hexString: String {
+        let ns = NSColor(self).usingColorSpace(.sRGB) ?? .black
+        return String(format: "%02X%02X%02X",
+                      Int(round(ns.redComponent * 255)),
+                      Int(round(ns.greenComponent * 255)),
+                      Int(round(ns.blueComponent * 255)))
     }
 }

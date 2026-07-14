@@ -156,6 +156,23 @@ final class DeviceManager: ObservableObject {
                 ))
                 try? await Task.sleep(for: .milliseconds(60))
             }
+
+            // Physical button LEDs (device IDs 7–14). Index 0 / ID 7 is the
+            // status light — the device manages it, never write it.
+            for (i, button) in page.buttons.enumerated() where i > 0 {
+                if Task.isCancelled { return }
+                let (r, g, b) = Self.rgb(fromHex: button.ledHex)
+                try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+                try? await Task.sleep(for: .milliseconds(20))
+            }
         }
+    }
+
+    private static func rgb(fromHex hex: String) -> (UInt8, UInt8, UInt8) {
+        var h = hex.trimmingCharacters(in: .alphanumerics.inverted)
+        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
+        var v: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&v)
+        return (UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF))
     }
 }

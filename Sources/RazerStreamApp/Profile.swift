@@ -52,6 +52,7 @@ struct KnobConfig: Codable, Equatable {
 
 struct ButtonConfig: Codable, Equatable {
     var action: ControlAction = .none
+    var ledHex: String = "000000"     // LED color; button 0 is the status light
 }
 
 // MARK: - Page: one full device layout
