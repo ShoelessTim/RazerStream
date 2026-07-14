@@ -282,13 +282,42 @@ final class DeviceManager: ObservableObject {
         }
     }
 
-    /// A color wave across buttons 2 to 8; connect feedback and LED self-test.
-    /// Runs on demand from the menu bar too.
+    /// Full self-test: a vivid pattern across every tile and knob strip while
+    /// the LEDs sweep, then restores the real page. Runs on demand and can be
+    /// triggered from the Device menu, toolbar, or menu bar.
     func testDevice() {
         guard let device, let store else { return }
         let page = store.currentPage
         pushTask?.cancel()
-        pushTask = Task { await self.runLEDCascade(device: device, page: page) }
+        pushTask = Task {
+            try? device.send(.setBrightness(10))
+            try? await Task.sleep(for: .milliseconds(40))
+
+            // Paint the screen test pattern across all 12 tiles
+            for i in 0..<page.tiles.count {
+                if Task.isCancelled { return }
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.renderTestTile(index: i)))
+                try? await Task.sleep(for: .milliseconds(45))
+            }
+            // Test cards on the six knob strips
+            for i in 0..<page.knobs.count {
+                if Task.isCancelled { return }
+                let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
+                let y = (i % 3) * 90
+                try? device.send(.setDisplayImage(
+                    display: .center, x: x, y: y, w: 60, h: 90,
+                    rgb565: TileRenderer.renderKnobTestZone(index: i)
+                ))
+                try? await Task.sleep(for: .milliseconds(45))
+            }
+
+            // LED rainbow sweep over the top of the screen pattern
+            await self.runLEDCascade(device: device, page: page)
+
+            // Hold the pattern a beat, then restore the real page
+            try? await Task.sleep(for: .milliseconds(700))
+            self.pushCurrentPage()
+        }
     }
 
     private func runLEDCascade(device: RazerStreamDevice, page: Page) async {

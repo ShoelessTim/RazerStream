@@ -7,6 +7,86 @@ import RazerStreamKit
 
 enum TileRenderer {
 
+    // MARK: - Self-test patterns
+
+    /// A vivid 90x90 test tile; per-index it draws gradients, crosshairs,
+    /// corner markers, and the tile number so orientation, color depth, and
+    /// edge alignment are all verifiable at a glance.
+    static func renderTestTile(index: Int) -> Data {
+        let size = RazerStreamController.buttonSize
+        guard let ctx = makeContext(width: size, height: size) else {
+            return Data(count: size * size * 2)
+        }
+        let s = CGFloat(size)
+
+        // Background; each tile a different vivid hue so a wrong-position push
+        // is obvious
+        let hue = CGFloat(index) / 12.0
+        ctx.setFillColor(NSColor(hue: hue, saturation: 0.85, brightness: 0.9, alpha: 1).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
+
+        switch index % 4 {
+        case 0:
+            // Horizontal RGB gradient bar
+            for x in 0..<size {
+                let f = CGFloat(x) / s
+                ctx.setFillColor(NSColor(red: f, green: 1 - f, blue: 0.5, alpha: 1).cgColor)
+                ctx.fill(CGRect(x: CGFloat(x), y: s * 0.35, width: 1, height: s * 0.3))
+            }
+        case 1:
+            // Concentric rings; checks smooth curves
+            for r in stride(from: s * 0.45, to: 4, by: -8) {
+                ctx.setStrokeColor(NSColor(white: r.truncatingRemainder(dividingBy: 16) < 8 ? 1 : 0, alpha: 1).cgColor)
+                ctx.setLineWidth(3)
+                ctx.strokeEllipse(in: CGRect(x: s/2 - r, y: s/2 - r, width: r*2, height: r*2))
+            }
+        case 2:
+            // Diagonal stripes
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
+            ctx.setLineWidth(4)
+            var x: CGFloat = -s
+            while x < s {
+                ctx.move(to: CGPoint(x: x, y: 0))
+                ctx.addLine(to: CGPoint(x: x + s, y: s))
+                x += 14
+            }
+            ctx.strokePath()
+        default:
+            // Crosshair with center dot
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
+            ctx.setLineWidth(2)
+            ctx.move(to: CGPoint(x: s/2, y: 6)); ctx.addLine(to: CGPoint(x: s/2, y: s-6))
+            ctx.move(to: CGPoint(x: 6, y: s/2)); ctx.addLine(to: CGPoint(x: s-6, y: s/2))
+            ctx.strokePath()
+        }
+
+        // Corner markers; white dots verify all four edges reach the panel
+        ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+        for (cx, cy) in [(6, 6), (size-12, 6), (6, size-12), (size-12, size-12)] {
+            ctx.fillEllipse(in: CGRect(x: CGFloat(cx), y: CGFloat(cy), width: 6, height: 6))
+        }
+
+        // Tile number, centered
+        drawText("\(index)", in: ctx, canvas: size, fontSize: 22, yOffset: nil)
+
+        return rgb565(from: ctx, width: size, height: size)
+    }
+
+    /// A 60x90 knob-strip test card; hue block plus its index.
+    static func renderKnobTestZone(index: Int) -> Data {
+        let w = 60, h = 90
+        guard let ctx = makeContext(width: w, height: h) else {
+            return Data(count: w * h * 2)
+        }
+        ctx.setFillColor(NSColor(hue: CGFloat(index) / 6.0, saturation: 0.9, brightness: 0.95, alpha: 1).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
+        ctx.setLineWidth(3)
+        ctx.stroke(CGRect(x: 3, y: 3, width: w - 6, height: h - 6))
+        drawText("K\(index + 1)", in: ctx, canvas: w, height: h, fontSize: 16, yOffset: nil)
+        return rgb565(from: ctx, width: w, height: h)
+    }
+
     // MARK: - Tiles (90×90)
 
     static func render(_ tile: TileConfig, toggledOn: Bool = false) -> Data {
