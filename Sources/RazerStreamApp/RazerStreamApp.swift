@@ -28,8 +28,8 @@ struct RazerStreamApp: App {
                  ? "Connected — fw \(deviceManager.firmware)"
                  : "No device")
             Divider()
-            Button("Push Profile to Device") {
-                deviceManager.pushProfile()
+            Button("Push Page to Device") {
+                deviceManager.pushCurrentPage()
             }
             Button("Quit RazerStream") {
                 deviceManager.stop()

@@ -7,9 +7,13 @@ enum ControlAction: Codable, Equatable {
     case launchApp(path: String)
     case shellCommand(String)
     case appleScript(String)
+    case keystroke(String)            // e.g. "cmd+shift+k", "f5", "space"
     case volumeUp
     case volumeDown
     case volumeMute
+    case gotoPage(Int)                // jump to page index
+    case nextPage
+    case prevPage
 
     var displayName: String {
         switch self {
@@ -17,9 +21,13 @@ enum ControlAction: Codable, Equatable {
         case .launchApp(let path):  return "Open \((path as NSString).lastPathComponent)"
         case .shellCommand:         return "Shell command"
         case .appleScript:          return "AppleScript"
+        case .keystroke(let k):     return "Keys: \(k)"
         case .volumeUp:             return "Volume +"
         case .volumeDown:           return "Volume −"
         case .volumeMute:           return "Mute"
+        case .gotoPage(let p):      return "Go to page \(p + 1)"
+        case .nextPage:             return "Next page"
+        case .prevPage:             return "Previous page"
         }
     }
 }
@@ -28,12 +36,15 @@ enum ControlAction: Codable, Equatable {
 
 struct TileConfig: Codable, Equatable {
     var label: String = ""
-    var colorHex: String = "333333"       // background color of the tile
-    var imagePath: String? = nil          // optional image drawn over the background
+    var colorHex: String = "333333"
+    var sfSymbol: String? = nil       // SF Symbols icon name (built-in library)
+    var imagePath: String? = nil      // custom image file (overrides symbol)
     var action: ControlAction = .none
 }
 
 struct KnobConfig: Codable, Equatable {
+    var label: String = ""
+    var sfSymbol: String? = nil
     var clockwise: ControlAction = .none
     var counterClockwise: ControlAction = .none
     var press: ControlAction = .none
@@ -43,14 +54,22 @@ struct ButtonConfig: Codable, Equatable {
     var action: ControlAction = .none
 }
 
-// MARK: - Profile
+// MARK: - Page: one full device layout
+
+struct Page: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var name: String = "Page"
+    var tiles: [TileConfig] = Array(repeating: TileConfig(), count: 12)
+    var knobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6)
+    var buttons: [ButtonConfig] = Array(repeating: ButtonConfig(), count: 8)
+}
+
+// MARK: - Profile: a set of pages + device settings
 
 struct Profile: Codable, Equatable, Identifiable {
     var id = UUID()
     var name: String = "Default"
-    var tiles: [TileConfig] = Array(repeating: TileConfig(), count: 12)
-    var knobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6)
-    var buttons: [ButtonConfig] = Array(repeating: ButtonConfig(), count: 8)
+    var pages: [Page] = [Page(name: "Page 1")]
     var brightness: UInt8 = 8
 }
 
@@ -59,9 +78,16 @@ struct Profile: Codable, Equatable, Identifiable {
 final class ProfileStore: ObservableObject {
     @Published var profiles: [Profile] = []
     @Published var activeProfileID: UUID?
+    @Published var currentPageIndex: Int = 0
 
     var activeProfile: Profile {
-        get { profiles.first(where: { $0.id == activeProfileID }) ?? profiles.first ?? Profile() }
+        profiles.first(where: { $0.id == activeProfileID }) ?? profiles.first ?? Profile()
+    }
+
+    var currentPage: Page {
+        let pages = activeProfile.pages
+        guard !pages.isEmpty else { return Page() }
+        return pages[min(currentPageIndex, pages.count - 1)]
     }
 
     private var storeURL: URL {
@@ -74,28 +100,51 @@ final class ProfileStore: ObservableObject {
     init() {
         load()
         if profiles.isEmpty {
-            var p = Profile()
-            p.name = "Default"
-            // Visible starter tiles so a fresh install shows something on-device
-            let starterColors = ["8E3B46", "B36A2E", "8F8A2B", "3E7C4F",
-                                 "2E7C8F", "31518F", "6C3E8F", "8F2E6E",
-                                 "4A4E69", "22577A", "38A3A5", "57CC99"]
-            for i in 0..<p.tiles.count {
-                p.tiles[i].label = "\(i)"
-                p.tiles[i].colorHex = starterColors[i % starterColors.count]
-            }
-            profiles = [p]
-            activeProfileID = p.id
+            profiles = [Self.starterProfile()]
+            activeProfileID = profiles[0].id
             save()
         }
         if activeProfileID == nil { activeProfileID = profiles.first?.id }
     }
 
+    static func starterProfile() -> Profile {
+        var page = Page(name: "Page 1")
+        let starterColors = ["8E3B46", "B36A2E", "8F8A2B", "3E7C4F",
+                             "2E7C8F", "31518F", "6C3E8F", "8F2E6E",
+                             "4A4E69", "22577A", "38A3A5", "57CC99"]
+        for i in 0..<page.tiles.count {
+            page.tiles[i].label = "\(i)"
+            page.tiles[i].colorHex = starterColors[i % starterColors.count]
+        }
+        var profile = Profile()
+        profile.pages = [page]
+        return profile
+    }
+
     func load() {
-        guard let data = try? Data(contentsOf: storeURL),
-              let decoded = try? JSONDecoder().decode(SavedState.self, from: data) else { return }
-        profiles = decoded.profiles
-        activeProfileID = decoded.activeProfileID
+        guard let data = try? Data(contentsOf: storeURL) else { return }
+
+        if let decoded = try? JSONDecoder().decode(SavedState.self, from: data) {
+            profiles = decoded.profiles
+            activeProfileID = decoded.activeProfileID
+            return
+        }
+
+        // Migrate v0 format (flat tiles/knobs/buttons on Profile → single page)
+        if let old = try? JSONDecoder().decode(OldSavedState.self, from: data) {
+            profiles = old.profiles.map { op in
+                var page = Page(name: "Page 1")
+                page.tiles = op.tiles
+                var profile = Profile()
+                profile.id = op.id
+                profile.name = op.name
+                profile.brightness = op.brightness
+                profile.pages = [page]
+                return profile
+            }
+            activeProfileID = old.activeProfileID
+            save()
+        }
     }
 
     func save() {
@@ -111,8 +160,48 @@ final class ProfileStore: ObservableObject {
         save()
     }
 
+    func updateCurrentPage(_ mutate: (inout Page) -> Void) {
+        let pageIdx = currentPageIndex
+        updateActive { profile in
+            guard pageIdx < profile.pages.count else { return }
+            mutate(&profile.pages[pageIdx])
+        }
+    }
+
+    // MARK: page navigation
+
+    func goToPage(_ index: Int) {
+        let count = activeProfile.pages.count
+        guard count > 0 else { return }
+        currentPageIndex = ((index % count) + count) % count
+    }
+
+    func addPage() {
+        updateActive { $0.pages.append(Page(name: "Page \($0.pages.count + 1)")) }
+        currentPageIndex = activeProfile.pages.count - 1
+    }
+
+    func deleteCurrentPage() {
+        guard activeProfile.pages.count > 1 else { return }
+        let idx = currentPageIndex
+        updateActive { $0.pages.remove(at: idx) }
+        currentPageIndex = min(idx, activeProfile.pages.count - 1)
+    }
+
     private struct SavedState: Codable {
         var profiles: [Profile]
+        var activeProfileID: UUID?
+    }
+
+    // v0 shape, for migration
+    private struct OldProfile: Codable {
+        var id: UUID
+        var name: String
+        var tiles: [TileConfig]
+        var brightness: UInt8
+    }
+    private struct OldSavedState: Codable {
+        var profiles: [OldProfile]
         var activeProfileID: UUID?
     }
 }

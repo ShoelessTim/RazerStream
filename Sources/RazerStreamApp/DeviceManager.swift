@@ -2,7 +2,7 @@ import Foundation
 import RazerStreamKit
 
 // Owns the device connection for the app's lifetime: connects, auto-reconnects,
-// pushes tile images, and routes incoming events to the ActionEngine.
+// pushes the current page's layout, and routes events to the ActionEngine.
 
 @MainActor
 final class DeviceManager: ObservableObject {
@@ -15,6 +15,7 @@ final class DeviceManager: ObservableObject {
     private var device: RazerStreamDevice?
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    private var pushTask: Task<Void, Never>?
     weak var store: ProfileStore?
 
     func start(store: ProfileStore) {
@@ -25,6 +26,7 @@ final class DeviceManager: ObservableObject {
     func stop() {
         eventTask?.cancel()
         reconnectTask?.cancel()
+        pushTask?.cancel()
         device?.close()
         device = nil
         connected = false
@@ -58,7 +60,6 @@ final class DeviceManager: ObservableObject {
                 guard let self else { return }
                 self.handle(event)
             }
-            // Stream ended → disconnected
             self?.connected = false
             self?.device = nil
         }
@@ -68,12 +69,13 @@ final class DeviceManager: ObservableObject {
 
     private func handle(_ event: DeviceEvent) {
         lastEvent = event.description
-        guard let profile = store?.activeProfile else { return }
+        guard let store else { return }
+        let page = store.currentPage
 
         switch event {
         case .connected:
             connected = true
-            pushProfile()
+            pushCurrentPage()
 
         case .disconnected:
             connected = false
@@ -84,26 +86,24 @@ final class DeviceManager: ObservableObject {
 
         case .buttonPress(let id, let pressed):
             guard pressed else { return }
-            // IDs 1–8 observed as physical buttons; 9–14 are knob presses
+            // IDs 1–8 are physical buttons; 9–14 are knob presses
             if id >= 1 && id <= 8 {
-                ActionEngine.perform(profile.buttons[id - 1].action)
+                run(page.buttons[id - 1].action)
             } else if id >= 9 && id <= 14 {
-                ActionEngine.perform(profile.knobs[id - 9].press)
+                run(page.knobs[id - 9].press)
             }
 
         case .knobRotate(let id, let delta):
             guard id >= 1 && id <= 6 else { return }
-            let knob = profile.knobs[id - 1]
-            ActionEngine.perform(delta > 0 ? knob.clockwise : knob.counterClockwise)
+            let knob = page.knobs[id - 1]
+            run(delta > 0 ? knob.clockwise : knob.counterClockwise)
 
         case .touchStart(let x, let y, _):
-            // Map touch to the tile grid and run its action
             let col = (x - RazerStreamController.centerXOffset) / RazerStreamController.buttonSize
             let row = y / RazerStreamController.buttonSize
             let cols = RazerStreamController.buttonColumns
             if col >= 0 && col < cols && row >= 0 && row < RazerStreamController.buttonRows {
-                let idx = row * cols + col
-                ActionEngine.perform(profile.tiles[idx].action)
+                run(page.tiles[row * cols + col].action)
             }
 
         default:
@@ -111,33 +111,46 @@ final class DeviceManager: ObservableObject {
         }
     }
 
-    // MARK: - Push profile to device
+    private func run(_ action: ControlAction) {
+        ActionEngine.perform(action) { [weak self] nav in
+            guard let self, let store = self.store else { return }
+            switch nav {
+            case .goto(let p): store.goToPage(p)
+            case .next:        store.goToPage(store.currentPageIndex + 1)
+            case .prev:        store.goToPage(store.currentPageIndex - 1)
+            }
+            self.pushCurrentPage()
+        }
+    }
 
-    private var pushTask: Task<Void, Never>?
+    // MARK: - Push current page to device
 
-    func pushProfile() {
-        guard let device, let profile = store?.activeProfile else { return }
-        // Pace writes: blasting 12 framebuffers back-to-back overruns the
-        // device's serial buffer and nothing renders. ~60ms apart is reliable.
+    func pushCurrentPage() {
+        guard let device, let store else { return }
+        let profile = store.activeProfile
+        let page = store.currentPage
+
+        // Pace writes: blasting framebuffers back-to-back overruns the
+        // device's serial buffer and nothing renders.
         pushTask?.cancel()
         pushTask = Task {
             try? device.send(.setBrightness(profile.brightness))
             try? await Task.sleep(for: .milliseconds(60))
-            for (i, tile) in profile.tiles.enumerated() {
+
+            for (i, tile) in page.tiles.enumerated() {
                 if Task.isCancelled { return }
-                let rgb565 = TileRenderer.render(tile)
-                try? device.send(.setButtonImage(button: i, rgb565: rgb565))
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile)))
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
-            // Knob strips: zones 0–2 on the left edge (x=0), 3–5 right (x=420)
-            for i in 0..<RazerStreamController.knobCount {
+            // Knob zones: 0–2 left strip (x=0), 3–5 right strip (x=420)
+            for (i, knob) in page.knobs.enumerated() {
                 if Task.isCancelled { return }
                 let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
                 let y = (i % 3) * 90
-                let rgb565 = TileRenderer.renderKnobZone(index: i)
                 try? device.send(.setDisplayImage(
-                    display: .center, x: x, y: y, w: 60, h: 90, rgb565: rgb565
+                    display: .center, x: x, y: y, w: 60, h: 90,
+                    rgb565: TileRenderer.renderKnobZone(knob, index: i)
                 ))
                 try? await Task.sleep(for: .milliseconds(60))
             }
