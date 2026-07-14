@@ -20,6 +20,8 @@ struct RazerStreamApp: App {
         }
     }
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Scene {
         WindowGroup("RazerStream") {
             ContentView()
@@ -27,13 +29,25 @@ struct RazerStreamApp: App {
                 .environmentObject(deviceManager)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
-                    // Bare (non-bundled) binaries aren't foreground apps by
-                    // default — promote ourselves so the window actually shows.
+                    // Bare binaries aren't foreground apps by default;
+                    // promote ourselves so the window actually shows
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
                     deviceManager.start(store: store)
                 }
         }
+        .commands {
+            CommandGroup(replacing: .help) {
+                Button("RazerStream Help") { openWindow(id: "help") }
+                    .keyboardShortcut("?", modifiers: .command)
+            }
+        }
+
+        Window("RazerStream Help", id: "help") {
+            HelpView()
+                .preferredColorScheme(colorScheme)
+        }
+        .windowResizability(.contentSize)
 
         MenuBarExtra {
             Text(deviceManager.connected
