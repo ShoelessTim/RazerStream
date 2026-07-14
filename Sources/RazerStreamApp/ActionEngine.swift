@@ -47,12 +47,17 @@ enum ActionEngine {
         case .mediaNext:      sendMediaKey(19)   // NX_KEYTYPE_FAST
         case .mediaPrevious:  sendMediaKey(20)   // NX_KEYTYPE_REWIND
 
+        // Hardware key events show the native on-screen volume HUD; they need
+        // the Accessibility grant, so fall back to silent AppleScript without it
         case .volumeUp:
-            runAppleScript("set volume output volume ((output volume of (get volume settings)) + 6)")
+            if hasAccessibility { sendMediaKey(0) }   // NX_KEYTYPE_SOUND_UP
+            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) + 6)") }
         case .volumeDown:
-            runAppleScript("set volume output volume ((output volume of (get volume settings)) - 6)")
+            if hasAccessibility { sendMediaKey(1) }   // NX_KEYTYPE_SOUND_DOWN
+            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) - 6)") }
         case .volumeMute:
-            runAppleScript("set volume output muted (not (output muted of (get volume settings)))")
+            if hasAccessibility { sendMediaKey(7) }   // NX_KEYTYPE_MUTE
+            else { runAppleScript("set volume output muted (not (output muted of (get volume settings)))") }
 
         case .gotoPage(let p): pageHandler(.goto(p))
         case .nextPage:        pageHandler(.next)
