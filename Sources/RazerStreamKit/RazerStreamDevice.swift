@@ -54,9 +54,15 @@ public final class RazerStreamDevice: @unchecked Sendable {
 
         try transport.open()
 
-        try transport.startReading { [weak self] data in
-            self?.receive(data)
-        }
+        try transport.startReading(
+            handler: { [weak self] data in
+                self?.receive(data)
+            },
+            onDisconnect: { [weak self] in
+                self?.emit(.disconnected(reason: "device unplugged"))
+                self?.close()
+            }
+        )
 
         // Kick off the websocket upgrade; version/serial are requested once
         // the device acknowledges the handshake (see receive()).

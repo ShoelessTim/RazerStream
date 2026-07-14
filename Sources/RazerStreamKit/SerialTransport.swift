@@ -120,8 +120,12 @@ public final class SerialTransport {
     // MARK: - Async Read
 
     /// Starts a background thread that blocks on read() and calls `handler`
-    /// for each chunk of bytes. Call after `open()`.
-    public func startReading(handler: @escaping (Data) -> Void) throws {
+    /// for each chunk of bytes. `onDisconnect` fires once if the port dies
+    /// (USB unplugged, read error, or a run of EOFs). Call after `open()`.
+    public func startReading(
+        handler: @escaping (Data) -> Void,
+        onDisconnect: @escaping () -> Void = {}
+    ) throws {
         guard readFD >= 0 else { throw TransportError.notOpen }
 
         let debug = ProcessInfo.processInfo.environment["RSTREAM_DEBUG"] != nil
@@ -130,6 +134,7 @@ public final class SerialTransport {
             var buf = [UInt8](repeating: 0, count: 4096)
             if debug { print("[read-thread] started, fd=\(self?.readFD ?? -99)") }
             var zeroReads = 0
+            var disconnected = false
             while let self = self, self.keepReading, self.readFD >= 0 {
                 let n = Darwin.read(self.readFD, &buf, buf.count)
                 if n > 0 {
@@ -137,20 +142,30 @@ public final class SerialTransport {
                     zeroReads = 0
                     handler(Data(buf[0..<n]))
                 } else if n == 0 {
+                    // With VMIN=1 a live port blocks; a flood of instant EOFs
+                    // means the device was pulled. Treat a sustained run as a
+                    // disconnect rather than spinning forever.
                     zeroReads += 1
-                    if debug && (zeroReads == 1 || zeroReads % 100_000 == 0) {
-                        print("[read-thread] read()=0 (count \(zeroReads))")
+                    if zeroReads >= 200 {
+                        disconnected = true
+                        break
                     }
-                    continue          // idle tty, keep polling
+                    usleep(5000)      // 5ms; avoid a busy spin on a dead port
                 } else {
                     if errno == EINTR { continue }
+                    // Any real read error on a serial port means it's gone
                     if self.keepReading {
-                        print("[read-thread] read failed: errno \(errno) (\(String(cString: strerror(errno))))")
+                        if debug { print("[read-thread] read failed: errno \(errno) (\(String(cString: strerror(errno))))") }
+                        disconnected = true
                     }
                     break
                 }
             }
-            if debug { print("[read-thread] exiting") }
+            if debug { print("[read-thread] exiting (disconnected=\(disconnected))") }
+            // Only signal if we weren't asked to stop (close() sets keepReading=false)
+            if disconnected, let self, self.keepReading {
+                onDisconnect()
+            }
         }
         thread.name = "com.razerstream.serial-read"
         thread.qualityOfService = .userInteractive

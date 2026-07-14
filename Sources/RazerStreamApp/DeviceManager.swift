@@ -68,8 +68,12 @@ final class DeviceManager: ObservableObject {
                 guard let self else { return }
                 self.handle(event)
             }
-            self?.connected = false
-            self?.device = nil
+            // Stream ended; tear down fully so the reconnect poll starts clean
+            guard let self else { return }
+            self.connected = false
+            self.device?.close()
+            self.device = nil
+            self.pushTask?.cancel()
         }
     }
 
@@ -87,7 +91,13 @@ final class DeviceManager: ObservableObject {
 
         case .disconnected:
             connected = false
+            pushTask?.cancel()
+            device?.close()
             device = nil
+            // Runtime state is per-session; clear so a reconnect starts fresh
+            toggleStates.removeAll()
+            activeTouches.removeAll()
+            shiftReturnPage = nil
 
         case .firmwareVersion(let v): firmware = v
         case .serialNumber(let s):    serial = s
