@@ -147,7 +147,7 @@ struct SettingsView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable().frame(width: 72, height: 72)
             Text("RazerStream").font(.title2.bold())
-            Text("Version 2.0").foregroundStyle(.secondary)
+            Text("Version 1.1.0").foregroundStyle(.secondary)
             Text("A community replacement for the retired Loupedeck software.")
                 .font(.callout)
                 .multilineTextAlignment(.center)

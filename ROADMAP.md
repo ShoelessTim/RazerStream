@@ -80,10 +80,9 @@ forks and sends pull requests; nothing about his workflow changes.
      button images; map 15-key layouts onto our 12 tiles with a review step
    - Loupedeck 6.3: import what we can parse from local profile storage so
      refugees from the dead app keep their muscle memory
-3. Icon libraries beyond SF Symbols
-   - Bundle permissively licensed packs behind the same picker UI:
-     Lucide (MIT), Tabler (MIT), Bootstrap Icons (MIT), Material Symbols
-     (Apache 2.0), simple-icons for brand logos (CC0)
+3. Icon libraries beyond SF Symbols (shipped in v1.1.0)
+   - Bundled Lucide (MIT) and Bootstrap Icons (MIT); more packs are a copy
+     into scripts/fetch_icon_packs.sh (Tabler, Material Symbols, simple-icons)
    - User icon packs: point the app at any folder of PNG/SVG files and it
      becomes a searchable library tab; this also covers Stream Deck icon packs
    - License text shipped with each bundled pack
