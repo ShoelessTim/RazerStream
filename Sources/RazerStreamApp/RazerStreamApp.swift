@@ -1,5 +1,14 @@
 import SwiftUI
 
+// Bridge so non-SwiftUI code (a device button firing the Show action) can ask
+// the app to open or front the main window. The closure is captured once at
+// launch from a SwiftUI context that has openWindow.
+@MainActor
+final class AppActions {
+    static let shared = AppActions()
+    var showMainWindow: (() -> Void)?
+}
+
 @main
 struct RazerStreamApp: App {
     @StateObject private var store = ProfileStore()
@@ -24,7 +33,10 @@ struct RazerStreamApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        WindowGroup("RazerStream") {
+        // Single Window (not WindowGroup); openWindow fronts the existing one
+        // or reopens it if closed, and never spawns a duplicate. That is the
+        // right model for a control panel.
+        Window("RazerStream", id: "main") {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(deviceManager)
@@ -36,15 +48,18 @@ struct RazerStreamApp: App {
                     NSApp.setActivationPolicy(.regular)
                     NSApp.activate(ignoringOtherApps: true)
                     deviceManager.start(store: store)
+                    // Capture a reopen closure for non-SwiftUI callers
+                    AppActions.shared.showMainWindow = {
+                        openWindow(id: "main")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
                 }
         }
         .commands {
             CommandMenu("Device") {
                 Button("Show RazerStream") {
+                    openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
-                    if let w = NSApp.windows.first(where: { $0.title == "RazerStream" }) {
-                        w.makeKeyAndOrderFront(nil)
-                    }
                 }
                 .keyboardShortcut("0", modifiers: .command)
 
@@ -95,10 +110,7 @@ struct RazerStreamApp: App {
             }
             Divider()
             Button("Show RazerStream") {
-                NSApp.activate(ignoringOtherApps: true)
-                if let w = NSApp.windows.first(where: { $0.title == "RazerStream" }) {
-                    w.makeKeyAndOrderFront(nil)
-                }
+                AppActions.shared.showMainWindow?()
             }
             Button("Test Device (LED sweep)") {
                 deviceManager.testDevice()
