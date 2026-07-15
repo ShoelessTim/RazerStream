@@ -32,5 +32,6 @@ tools on top.
 Download: https://github.com/ShoelessTim/RazerStream/releases/latest
 Source: https://github.com/ShoelessTim/RazerStream
 
-Requires macOS 14 or later. Not affiliated with Razer, Loupedeck, or Logitech;
-just a community keeping good hardware alive.
+Releases are Developer ID signed and notarized by Apple; download, drag to
+Applications, double-click. Requires macOS 14 or later. Not affiliated with
+Razer, Loupedeck, or Logitech; just a community keeping good hardware alive.
