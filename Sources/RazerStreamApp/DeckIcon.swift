@@ -5,6 +5,7 @@ import SwiftUI
 // 4×3 tile grid, knob nubs on each side. Template image so macOS
 // tints it correctly for light/dark menu bars.
 
+@MainActor
 enum DeckIcon {
 
     static let menuBar: NSImage = {
