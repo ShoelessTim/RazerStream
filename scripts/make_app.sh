@@ -31,6 +31,11 @@ if [ ! -f "$ICNS" ]; then
 fi
 cp "$ICNS" "$APP/Contents/Resources/AppIcon.icns"
 
+# Bundled icon packs; fetched once by scripts/fetch_icon_packs.sh
+if [ -d "$ROOT/dist/IconPacks" ]; then
+    cp -R "$ROOT/dist/IconPacks" "$APP/Contents/Resources/IconPacks"
+fi
+
 cat > "$APP/Contents/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

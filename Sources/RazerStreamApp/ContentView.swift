@@ -166,7 +166,10 @@ struct ContentView: View {
                     .fill(Color(hex: tile.colorHex))
                 if let path = tile.imagePath, let img = NSImage(contentsOfFile: path) {
                     Image(nsImage: img)
+                        .renderingMode(tile.iconTint ? .template : .original)
                         .resizable().scaledToFit()
+                        .padding(tile.iconTint ? 18 : 0)
+                        .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else if let symbol = tile.sfSymbol {
                     Image(systemName: symbol)
@@ -495,6 +498,7 @@ struct TileInspector: View {
     @State private var sfSymbol = ""
     @State private var altSymbol = ""
     @State private var imagePath = ""
+    @State private var iconTint = false
     @State private var action: ControlAction = .none
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
@@ -509,6 +513,13 @@ struct TileInspector: View {
                     if !sfSymbol.isEmpty {
                         Image(systemName: sfSymbol)
                         Text(sfSymbol).font(.caption)
+                    } else if !imagePath.isEmpty {
+                        if let img = IconThumbnails.image(forPath: imagePath) {
+                            Image(nsImage: img)
+                                .renderingMode(iconTint ? .template : .original)
+                        }
+                        Text((imagePath as NSString).lastPathComponent)
+                            .font(.caption).lineLimit(1)
                     } else {
                         Text("No icon").foregroundStyle(.secondary).font(.caption)
                     }
@@ -522,6 +533,7 @@ struct TileInspector: View {
                         panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic]
                         if panel.runModal() == .OK, let url = panel.url {
                             imagePath = url.path
+                            iconTint = false
                         }
                     }
                 }
@@ -534,7 +546,7 @@ struct TileInspector: View {
                 .keyboardShortcut(.return)
         }
         .sheet(isPresented: $showSymbolPicker) {
-            SymbolPicker(symbol: $sfSymbol)
+            IconPicker(symbol: $sfSymbol, imagePath: $imagePath, tintIcon: $iconTint)
         }
         .onAppear(perform: loadCurrent)
         .onChange(of: tileIndex) { loadCurrent() }
@@ -548,6 +560,7 @@ struct TileInspector: View {
         sfSymbol = tile.sfSymbol ?? ""
         altSymbol = tile.altSymbol ?? ""
         imagePath = tile.imagePath ?? ""
+        iconTint = tile.iconTint
         action = tile.action
         releaseAction = tile.releaseAction
         mode = tile.mode
@@ -561,6 +574,7 @@ struct TileInspector: View {
                 sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
                 altSymbol: altSymbol.isEmpty ? nil : altSymbol,
                 imagePath: imagePath.isEmpty ? nil : imagePath,
+                iconTint: iconTint,
                 action: action,
                 releaseAction: releaseAction,
                 mode: mode

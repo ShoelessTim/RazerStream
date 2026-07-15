@@ -14,9 +14,10 @@ struct SettingsView: View {
         TabView {
             general.tabItem { Label("General", systemImage: "gearshape") }
             device.tabItem { Label("Device", systemImage: "rectangle.grid.3x2") }
+            icons.tabItem { Label("Icons", systemImage: "photo.on.rectangle.angled") }
             about.tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 460, height: 320)
+        .frame(width: 480, height: 360)
     }
 
     // MARK: General
@@ -89,6 +90,54 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { brightness = Double(store.activeProfile.brightness) }
+    }
+
+    // MARK: Icons
+
+    @EnvironmentObject var packManager: IconPackManager
+
+    private var icons: some View {
+        Form {
+            Section("Icon packs") {
+                ForEach(packManager.packs) { pack in
+                    LabeledContent(pack.name) {
+                        Text("\(pack.icons.count) icons")
+                            .foregroundStyle(.secondary)
+                        if packManager.userFolders.contains(pack.directory.path) {
+                            Button {
+                                packManager.removeUserFolder(pack.directory.path)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove this folder")
+                        }
+                    }
+                }
+                if packManager.packs.isEmpty {
+                    Text("No icon packs found")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.prompt = "Add Folder"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        packManager.addUserFolder(url)
+                    }
+                } label: {
+                    Label("Add a folder of icons…", systemImage: "folder.badge.plus")
+                }
+            } footer: {
+                Text("Any folder of PNG or SVG files becomes a searchable tab in the icon library; Stream Deck icon packs work as is.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 
     // MARK: About

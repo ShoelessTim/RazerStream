@@ -4,6 +4,7 @@ import SwiftUI
 struct RazerStreamApp: App {
     @StateObject private var store = ProfileStore()
     @StateObject private var deviceManager = DeviceManager()
+    @StateObject private var packManager = IconPackManager()
 
     // 0 = follow system (default), 1 = light, 2 = dark
     @AppStorage("appearanceMode") private var appearanceMode = 0
@@ -27,6 +28,7 @@ struct RazerStreamApp: App {
             ContentView()
                 .environmentObject(store)
                 .environmentObject(deviceManager)
+                .environmentObject(packManager)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
                     // Bare binaries aren't foreground apps by default;
@@ -77,6 +79,7 @@ struct RazerStreamApp: App {
             SettingsView()
                 .environmentObject(store)
                 .environmentObject(deviceManager)
+                .environmentObject(packManager)
                 .preferredColorScheme(colorScheme)
         }
 

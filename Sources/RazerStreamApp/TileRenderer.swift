@@ -101,11 +101,17 @@ enum TileRenderer {
         // Toggles that are ON use the alternate icon when set
         let effectiveSymbol = (toggledOn && tile.altSymbol != nil) ? tile.altSymbol : tile.sfSymbol
 
-        // Custom image beats SF symbol; both centered
-        if let path = tile.imagePath,
-           let nsImage = NSImage(contentsOfFile: path),
-           let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            drawFitted(cgImage, in: ctx, canvas: size, inset: 0)
+        // Custom image beats SF symbol; both centered. Tinted images (mono
+        // SVG pack icons) render white with symbol-style insets.
+        if let path = tile.imagePath, let nsImage = NSImage(contentsOfFile: path) {
+            if tile.iconTint {
+                if let cgImage = tintedWhite(nsImage)?
+                    .cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    drawFitted(cgImage, in: ctx, canvas: size, inset: 18)
+                }
+            } else if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                drawFitted(cgImage, in: ctx, canvas: size, inset: 0)
+            }
         } else if let symbol = effectiveSymbol,
                   let cgImage = symbolImage(symbol, pointSize: 44) {
             drawFitted(cgImage, in: ctx, canvas: size, inset: 18)
@@ -177,6 +183,18 @@ enum TileRenderer {
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )
+    }
+
+    /// Recolors a mono image (like a stroke SVG icon) to solid white,
+    /// preserving its alpha.
+    private static func tintedWhite(_ image: NSImage) -> NSImage? {
+        let out = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            NSColor.white.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        return out
     }
 
     /// White template rendering of an SF Symbol.

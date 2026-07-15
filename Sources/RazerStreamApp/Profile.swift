@@ -59,12 +59,13 @@ struct TileConfig: Codable, Equatable {
     var sfSymbol: String? = nil       // SF Symbols icon name (built-in library)
     var altSymbol: String? = nil      // icon shown while a toggle is ON
     var imagePath: String? = nil      // custom image file (overrides symbol)
+    var iconTint: Bool = false        // tint the image white; for mono pack SVGs
     var action: ControlAction = .none
     var releaseAction: ControlAction = .none   // toggle-off / momentary-release
     var mode: ControlMode = .tap
 
     init(label: String = "", colorHex: String = "333333", sfSymbol: String? = nil,
-         altSymbol: String? = nil, imagePath: String? = nil,
+         altSymbol: String? = nil, imagePath: String? = nil, iconTint: Bool = false,
          action: ControlAction = .none, releaseAction: ControlAction = .none,
          mode: ControlMode = .tap) {
         self.label = label
@@ -72,6 +73,7 @@ struct TileConfig: Codable, Equatable {
         self.sfSymbol = sfSymbol
         self.altSymbol = altSymbol
         self.imagePath = imagePath
+        self.iconTint = iconTint
         self.action = action
         self.releaseAction = releaseAction
         self.mode = mode
@@ -85,6 +87,7 @@ struct TileConfig: Codable, Equatable {
         sfSymbol = try c.decodeIfPresent(String.self, forKey: .sfSymbol)
         altSymbol = try c.decodeIfPresent(String.self, forKey: .altSymbol)
         imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        iconTint = try c.decodeIfPresent(Bool.self, forKey: .iconTint) ?? false
         action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
         releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
         mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap
