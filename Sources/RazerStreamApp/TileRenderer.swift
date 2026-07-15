@@ -186,9 +186,15 @@ enum TileRenderer {
     }
 
     /// Recolors a mono image (like a stroke SVG icon) to solid white,
-    /// preserving its alpha.
+    /// preserving its alpha. Rasterizes at high resolution so small vector
+    /// icons (Lucide is 24x24) stay crisp when scaled onto a tile.
     private static func tintedWhite(_ image: NSImage) -> NSImage? {
-        let out = NSImage(size: image.size, flipped: false) { rect in
+        let target: CGFloat = 256
+        let aspect = image.size.height > 0 ? image.size.width / image.size.height : 1
+        let size = aspect >= 1
+            ? NSSize(width: target, height: target / aspect)
+            : NSSize(width: target * aspect, height: target)
+        let out = NSImage(size: size, flipped: false) { rect in
             image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
             NSColor.white.set()
             rect.fill(using: .sourceAtop)

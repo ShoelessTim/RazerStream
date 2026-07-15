@@ -108,10 +108,13 @@ enum IconThumbnails {
         let key = "\(path)#\(Int(side))" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let full = NSImage(contentsOfFile: path) else { return nil }
-        let thumb = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        // Rasterize at 2x for retina so small vector icons stay crisp
+        let px = side * 2
+        let thumb = NSImage(size: NSSize(width: px, height: px), flipped: false) { rect in
             full.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
             return true
         }
+        thumb.size = NSSize(width: side, height: side)
         thumb.isTemplate = path.lowercased().hasSuffix(".svg")
         cache.setObject(thumb, forKey: key)
         return thumb
