@@ -32,13 +32,23 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 
 ## Install (no building required)
 
+With Homebrew:
+
+```sh
+brew tap shoelesstim/tap
+brew install --cask razerstream
+```
+
+Or by hand:
+
 1. Download `RazerStream-vX.Y.Z.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by
    Apple, so there are no warnings
-4. Grant the Accessibility permission when prompted; keystrokes and media keys
-   need it
+
+Either way, grant the Accessibility permission when prompted; keystrokes and
+media keys need it.
 
 ## Build and run
 
