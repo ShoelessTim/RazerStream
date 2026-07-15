@@ -140,18 +140,29 @@ enum TileRenderer {
         ctx.setFillColor(CGColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
 
+        // Center the icon and label as one vertical group; icon alone sits
+        // dead center, label alone sits dead center, both stack around center
+        let hasLabel = !knob.label.isEmpty
+        let labelBlock: CGFloat = hasLabel ? 18 : 0   // text height plus gap
+
         if let symbol = knob.sfSymbol, let cgImage = symbolImage(symbol, pointSize: 26) {
             let iw = CGFloat(cgImage.width), ih = CGFloat(cgImage.height)
             let scale = min(36 / iw, 36 / ih, 1)
             let dw = iw * scale, dh = ih * scale
+            let groupH = dh + labelBlock
+            // CG origin is bottom left; the icon occupies the top of the group
+            let iconY = (CGFloat(h) - groupH) / 2 + labelBlock
             ctx.interpolationQuality = .high
             ctx.draw(cgImage, in: CGRect(x: (CGFloat(w) - dw) / 2,
-                                         y: CGFloat(h) - dh - 12,
+                                         y: iconY,
                                          width: dw, height: dh))
-        }
-
-        if !knob.label.isEmpty {
-            drawText(knob.label, in: ctx, canvas: w, height: h, fontSize: 10, yOffset: 8)
+            if hasLabel {
+                drawText(knob.label, in: ctx, canvas: w, height: h,
+                         fontSize: 10, yOffset: iconY - labelBlock + 2)
+            }
+        } else if hasLabel {
+            drawText(knob.label, in: ctx, canvas: w, height: h,
+                     fontSize: 10, yOffset: nil)
         }
 
         return rgb565(from: ctx, width: w, height: h)
