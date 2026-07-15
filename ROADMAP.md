@@ -66,7 +66,7 @@ forks and sends pull requests; nothing about his workflow changes.
 3. Workflow
    - Tim: push to main whenever; optionally a dev branch for experiments
    - Contributors: fork, branch, PR into main; Tim merges what he likes
-   - GitHub Actions CI later: swift build and swift test on PRs
+   - GitHub Actions CI: swift build and swift test on every push and PR (done)
 4. Prereq on this Mac: brew install gh; gh auth login; then one command setup
 
 ## Track 4: Features (post-polish)

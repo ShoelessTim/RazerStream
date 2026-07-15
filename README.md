@@ -1,5 +1,7 @@
 # RazerStream
 
+[![CI](https://github.com/ShoelessTim/RazerStream/actions/workflows/ci.yml/badge.svg)](https://github.com/ShoelessTim/RazerStream/actions/workflows/ci.yml)
+
 A native macOS app for the **Razer Stream Controller**, the 8-button, 6-knob,
 touchscreen macro deck that Loupedeck built and Logitech orphaned. When the
 official software was retired the hardware still worked; this project talks to
