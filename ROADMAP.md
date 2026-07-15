@@ -96,6 +96,22 @@ forks and sends pull requests; nothing about his workflow changes.
 9. Webhooks and Home Assistant/MQTT actions
 10. Plugin API: action providers as separate processes or scripts
 
+## Track 5: Other platforms (community owned)
+
+Tim has no appetite to build these himself; the project is structured so
+someone else can. PROTOCOL.md documents the full wire protocol precisely so a
+port never needs a serial sniffer.
+
+1. Linux kit and CLI: RazerStreamKit is Foundation plus POSIX serial I/O and
+   compiles on Linux Swift with one small shim; replace the IOKit device
+   discovery with a /dev/ttyACM* or sysfs scan behind #if os(Linux). The
+   rstream CLI then ports nearly for free. Small, real, and a good first
+   contribution.
+2. Linux GUI: a new frontend (GTK or Qt) on top of the kit; contributors
+   welcome.
+3. Windows: realistically a C# app built against PROTOCOL.md; Swift on Windows
+   exists but has no viable GUI story.
+
 ## Known environment notes
 
 - macOS 27 beta CLT cannot compile SPM manifests; Xcode beta at /Applications

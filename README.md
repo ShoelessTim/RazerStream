@@ -70,6 +70,16 @@ swift run rstream brightness 7
 - `PROTOCOL.md` the reverse-engineered wire protocol, documented byte by byte.
 - `ROADMAP.md` where this is going.
 
+## Other platforms
+
+The app is macOS only and staying that way, but the project is built to be
+ported. `RazerStreamKit` is Foundation plus POSIX serial I/O and is one small
+device-discovery shim away from compiling on Linux Swift, which would bring the
+`rstream` CLI along nearly for free. The complete wire protocol lives in
+[PROTOCOL.md](PROTOCOL.md); a Linux GUI (GTK or Qt) or a Windows app (C# is the
+sane choice there) can be built on top of it without ever sniffing a byte.
+Contributions on this front are very welcome; see the roadmap.
+
 ## Credits
 
 Protocol groundwork stands on the shoulders of the community reverse
