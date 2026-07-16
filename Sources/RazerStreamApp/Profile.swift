@@ -51,6 +51,23 @@ enum ControlMode: Codable, Equatable {
     case shiftPage(Int)      // hold: show page N; release: return
 }
 
+// MARK: - Live tile content
+
+// A tile can show self-updating content instead of a static label/icon; the
+// clock is the first one. More kinds (now playing, CPU meter) can be added
+// here without touching the storage format again.
+enum LiveContent: Codable, Equatable {
+    case none
+    case clock
+
+    var displayName: String {
+        switch self {
+        case .none:  return "None"
+        case .clock: return "Clock"
+        }
+    }
+}
+
 // MARK: - Per-control configuration
 
 struct TileConfig: Codable, Equatable {
@@ -60,12 +77,14 @@ struct TileConfig: Codable, Equatable {
     var altSymbol: String? = nil      // icon shown while a toggle is ON
     var imagePath: String? = nil      // custom image file (overrides symbol)
     var iconTint: Bool = false        // tint the image white; for mono pack SVGs
+    var liveContent: LiveContent = .none   // self-updating content; overrides label/icon
     var action: ControlAction = .none
     var releaseAction: ControlAction = .none   // toggle-off / momentary-release
     var mode: ControlMode = .tap
 
     init(label: String = "", colorHex: String = "333333", sfSymbol: String? = nil,
          altSymbol: String? = nil, imagePath: String? = nil, iconTint: Bool = false,
+         liveContent: LiveContent = .none,
          action: ControlAction = .none, releaseAction: ControlAction = .none,
          mode: ControlMode = .tap) {
         self.label = label
@@ -74,6 +93,7 @@ struct TileConfig: Codable, Equatable {
         self.altSymbol = altSymbol
         self.imagePath = imagePath
         self.iconTint = iconTint
+        self.liveContent = liveContent
         self.action = action
         self.releaseAction = releaseAction
         self.mode = mode
@@ -88,6 +108,7 @@ struct TileConfig: Codable, Equatable {
         altSymbol = try c.decodeIfPresent(String.self, forKey: .altSymbol)
         imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
         iconTint = try c.decodeIfPresent(Bool.self, forKey: .iconTint) ?? false
+        liveContent = try c.decodeIfPresent(LiveContent.self, forKey: .liveContent) ?? .none
         action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
         releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
         mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap

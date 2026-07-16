@@ -16,6 +16,7 @@ final class DeviceManager: ObservableObject {
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
+    private var liveTileTask: Task<Void, Never>?
     weak var store: ProfileStore?
 
     // Runtime control state (not persisted)
@@ -29,15 +30,45 @@ final class DeviceManager: ObservableObject {
     func start(store: ProfileStore) {
         self.store = store
         connectLoop()
+        startLiveTileClock()
     }
 
     func stop() {
         eventTask?.cancel()
         reconnectTask?.cancel()
         pushTask?.cancel()
+        liveTileTask?.cancel()
         device?.close()
         device = nil
         connected = false
+    }
+
+    // MARK: - Live tiles (self-updating content, e.g. the clock)
+
+    /// Redraws every clock tile on the current page once a minute, timed to
+    /// land right on the minute boundary so it changes exactly when a real
+    /// clock would.
+    private func startLiveTileClock() {
+        liveTileTask?.cancel()
+        liveTileTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let now = Date()
+                let secondsIntoMinute = Calendar.current.component(.second, from: now)
+                let delay = Double(60 - secondsIntoMinute)
+                try? await Task.sleep(for: .seconds(delay))
+                if Task.isCancelled { return }
+                self.refreshLiveTiles()
+            }
+        }
+    }
+
+    private func refreshLiveTiles() {
+        guard connected, let store else { return }
+        let page = store.currentPage
+        for (i, tile) in page.tiles.enumerated() where tile.liveContent != .none {
+            pushTile(i)
+        }
     }
 
     // MARK: - Connection

@@ -164,7 +164,9 @@ struct ContentView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(hex: tile.colorHex))
-                if let path = tile.imagePath, let img = NSImage(contentsOfFile: path) {
+                if tile.liveContent == .clock {
+                    clockFace()
+                } else if let path = tile.imagePath, let img = NSImage(contentsOfFile: path) {
                     Image(nsImage: img)
                         .renderingMode(tile.iconTint ? .template : .original)
                         .resizable().scaledToFit()
@@ -176,13 +178,15 @@ struct ContentView: View {
                         .font(.system(size: 30))
                         .foregroundStyle(.white)
                 }
-                VStack {
-                    Spacer()
-                    Text(tile.label.isEmpty && tile.sfSymbol == nil && tile.imagePath == nil
-                         ? "\(index)" : tile.label)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.bottom, 4)
+                if tile.liveContent == .none {
+                    VStack {
+                        Spacer()
+                        Text(tile.label.isEmpty && tile.sfSymbol == nil && tile.imagePath == nil
+                             ? "\(index)" : tile.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.bottom, 4)
+                    }
                 }
             }
             .frame(width: 84, height: 84)
@@ -192,6 +196,20 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Mirrors TileRenderer's clock face in the app window; ticks on its own
+    /// so the preview matches what is drawn on the device.
+    private func clockFace() -> some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            VStack(spacing: 2) {
+                Text(context.date, format: .dateTime.hour().minute())
+                    .font(.system(size: 15, weight: .semibold))
+                Text(context.date, format: .dateTime.weekday(.abbreviated).day())
+                    .font(.system(size: 10))
+            }
+            .foregroundStyle(.white)
+        }
     }
 
     private func knobColumn(indices: [Int], page: Page) -> some View {
@@ -499,6 +517,7 @@ struct TileInspector: View {
     @State private var altSymbol = ""
     @State private var imagePath = ""
     @State private var iconTint = false
+    @State private var liveContent: LiveContent = .none
     @State private var action: ControlAction = .none
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
@@ -507,33 +526,43 @@ struct TileInspector: View {
     var body: some View {
         Form {
             Section("Tile \(tileIndex) — \(store.currentPage.name)") {
-                TextField("Label", text: $label)
                 ColorPicker("Background", selection: $color, supportsOpacity: false)
-                HStack {
-                    if !sfSymbol.isEmpty {
-                        Image(systemName: sfSymbol)
-                        Text(sfSymbol).font(.caption)
-                    } else if !imagePath.isEmpty {
-                        if let img = IconThumbnails.image(forPath: imagePath) {
-                            Image(nsImage: img)
-                                .renderingMode(iconTint ? .template : .original)
-                        }
-                        Text((imagePath as NSString).lastPathComponent)
-                            .font(.caption).lineLimit(1)
-                    } else {
-                        Text("No icon").foregroundStyle(.secondary).font(.caption)
-                    }
-                    Spacer()
-                    Button("Icon Library…") { showSymbolPicker = true }
+                Picker("Content", selection: $liveContent) {
+                    Text("Static").tag(LiveContent.none)
+                    Text("Clock").tag(LiveContent.clock)
                 }
-                HStack {
-                    TextField("Custom image (optional)", text: $imagePath)
-                    Button("Choose…") {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic]
-                        if panel.runModal() == .OK, let url = panel.url {
-                            imagePath = url.path
-                            iconTint = false
+                if liveContent == .clock {
+                    Text("Shows the current time; updates on its own once a minute.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    TextField("Label", text: $label)
+                    HStack {
+                        if !sfSymbol.isEmpty {
+                            Image(systemName: sfSymbol)
+                            Text(sfSymbol).font(.caption)
+                        } else if !imagePath.isEmpty {
+                            if let img = IconThumbnails.image(forPath: imagePath) {
+                                Image(nsImage: img)
+                                    .renderingMode(iconTint ? .template : .original)
+                            }
+                            Text((imagePath as NSString).lastPathComponent)
+                                .font(.caption).lineLimit(1)
+                        } else {
+                            Text("No icon").foregroundStyle(.secondary).font(.caption)
+                        }
+                        Spacer()
+                        Button("Icon Library…") { showSymbolPicker = true }
+                    }
+                    HStack {
+                        TextField("Custom image (optional)", text: $imagePath)
+                        Button("Choose…") {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic]
+                            if panel.runModal() == .OK, let url = panel.url {
+                                imagePath = url.path
+                                iconTint = false
+                            }
                         }
                     }
                 }
@@ -561,6 +590,7 @@ struct TileInspector: View {
         altSymbol = tile.altSymbol ?? ""
         imagePath = tile.imagePath ?? ""
         iconTint = tile.iconTint
+        liveContent = tile.liveContent
         action = tile.action
         releaseAction = tile.releaseAction
         mode = tile.mode
@@ -575,6 +605,7 @@ struct TileInspector: View {
                 altSymbol: altSymbol.isEmpty ? nil : altSymbol,
                 imagePath: imagePath.isEmpty ? nil : imagePath,
                 iconTint: iconTint,
+                liveContent: liveContent,
                 action: action,
                 releaseAction: releaseAction,
                 mode: mode

@@ -98,6 +98,13 @@ enum TileRenderer {
         ctx.setFillColor(color(fromHex: tile.colorHex))
         ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
 
+        // Live content replaces the label/icon entirely; the background
+        // color and toggle ring above/below still apply
+        if tile.liveContent == .clock {
+            drawClockFace(in: ctx, canvas: size)
+            return rgb565(from: ctx, width: size, height: size)
+        }
+
         // Toggles that are ON use the alternate icon when set
         let effectiveSymbol = (toggledOn && tile.altSymbol != nil) ? tile.altSymbol : tile.sfSymbol
 
@@ -212,6 +219,28 @@ enum TileRenderer {
             .applying(.init(paletteColors: [.white]))
         guard let configured = base.withSymbolConfiguration(config) else { return nil }
         return configured.cgImage(forProposedRect: nil, context: nil, hints: nil)
+    }
+
+    private static let clockTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("j:mm")   // respects 12/24h locale setting
+        return f
+    }()
+
+    private static let clockDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE d")  // e.g. "Tue 15"
+        return f
+    }()
+
+    /// Draws the current time large, centered, with the weekday and day
+    /// underneath; used for tiles with liveContent set to .clock.
+    private static func drawClockFace(in ctx: CGContext, canvas: Int) {
+        let now = Date()
+        drawText(clockTimeFormatter.string(from: now), in: ctx, canvas: canvas,
+                 fontSize: 22, yOffset: CGFloat(canvas) * 0.42)
+        drawText(clockDateFormatter.string(from: now), in: ctx, canvas: canvas,
+                 fontSize: 12, yOffset: CGFloat(canvas) * 0.20)
     }
 
     private static func drawFitted(_ image: CGImage, in ctx: CGContext, canvas: Int, inset: CGFloat) {
