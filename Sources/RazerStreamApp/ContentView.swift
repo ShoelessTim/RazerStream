@@ -40,24 +40,30 @@ struct ContentView: View {
         } content: {
             // The mirror represents fixed physical hardware, so it is one
             // fixed-size unit (knobs, tiles, and buttons locked together) that
-            // stays centered with generous margins. It lives in a ScrollView
-            // so that if the window is ever smaller than the unit, the mirror
-            // scrolls rather than clipping into the neighbouring columns.
-            ScrollView([.horizontal, .vertical]) {
-                VStack(spacing: 20) {
-                    if !deviceManager.connected {
-                        Label("No device connected; edits still apply once one is plugged in.",
-                              systemImage: "cable.connector.slash")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(8)
-                            .frame(maxWidth: Self.mirrorWidth)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            // stays centered with generous margins. GeometryReader reports the
+            // real viewport size so the content can be told to fill *at least*
+            // that much (minWidth/minHeight, not maxWidth/maxHeight): a plain
+            // maxWidth/maxHeight: .infinity inside a ScrollView fights the
+            // ScrollView's own sizing model and only centers reliably on one
+            // axis. With min sizing the content centers on both axes when
+            // there is room, and scrolls instead of clipping when there isn't.
+            GeometryReader { geo in
+                ScrollView([.horizontal, .vertical]) {
+                    VStack(spacing: 20) {
+                        if !deviceManager.connected {
+                            Label("No device connected; edits still apply once one is plugged in.",
+                                  systemImage: "cable.connector.slash")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(8)
+                                .frame(maxWidth: Self.mirrorWidth)
+                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        deviceUnit
                     }
-                    deviceUnit
+                    .padding(28)
+                    .frame(minWidth: geo.size.width, minHeight: geo.size.height)
                 }
-                .padding(28)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(minWidth: Self.mirrorWidth + 56)
             .animation(.easeInOut, value: deviceManager.connected)
@@ -310,7 +316,9 @@ extension ContentView {
         Button { selection = .tile(index) } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: tile.colorHex))
+                    // Quantized to the tile panel's real 16-bit RGB565 depth,
+                    // so this preview matches what the device actually shows
+                    .fill(Color.quantizedToTilePanel(hex: tile.colorHex))
                 if tile.liveContent == .clock {
                     clockFace()
                 } else if let path = tile.imagePath, let img = NSImage(contentsOfFile: path) {
@@ -745,26 +753,32 @@ struct TileInspector: View {
                 } else {
                     TextField("Label", text: $label)
                     LabeledContent("Icon") {
-                        HStack(spacing: 6) {
-                            if !sfSymbol.isEmpty {
-                                Image(systemName: sfSymbol)
-                                Text(sfSymbol)
-                            } else if !imagePath.isEmpty {
-                                if let img = IconThumbnails.image(forPath: imagePath) {
-                                    Image(nsImage: img)
-                                        .renderingMode(iconTint ? .template : .original)
+                        HStack(spacing: 8) {
+                            Group {
+                                if !sfSymbol.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: sfSymbol)
+                                        Text(sfSymbol)
+                                    }
+                                } else if !imagePath.isEmpty {
+                                    HStack(spacing: 4) {
+                                        if let img = IconThumbnails.image(forPath: imagePath) {
+                                            Image(nsImage: img)
+                                                .renderingMode(iconTint ? .template : .original)
+                                        }
+                                        Text((imagePath as NSString).lastPathComponent)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                } else {
+                                    Text("None").foregroundStyle(.secondary)
                                 }
-                                Text((imagePath as NSString).lastPathComponent)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            } else {
-                                Text("None").foregroundStyle(.secondary)
                             }
+                            .font(.caption)
+                            Spacer(minLength: 8)
+                            Button("Icon Library…") { showSymbolPicker = true }
                         }
-                        .font(.caption)
                     }
-                    Button("Icon Library…") { showSymbolPicker = true }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
 
                     HStack {
                         TextField("Custom image (optional)", text: $imagePath)
@@ -847,18 +861,22 @@ struct KnobInspector: View {
             Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
                 TextField("Label", text: $label)
                 LabeledContent("Icon") {
-                    if !sfSymbol.isEmpty {
-                        HStack(spacing: 6) {
-                            Image(systemName: sfSymbol)
-                            Text(sfSymbol)
+                    HStack(spacing: 8) {
+                        Group {
+                            if !sfSymbol.isEmpty {
+                                HStack(spacing: 4) {
+                                    Image(systemName: sfSymbol)
+                                    Text(sfSymbol)
+                                }
+                            } else {
+                                Text("None").foregroundStyle(.secondary)
+                            }
                         }
                         .font(.caption)
-                    } else {
-                        Text("None").foregroundStyle(.secondary).font(.caption)
+                        Spacer(minLength: 8)
+                        Button("Icon Library…") { showSymbolPicker = true }
                     }
                 }
-                Button("Icon Library…") { showSymbolPicker = true }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             Section("Actions") {
                 ActionEditor(title: "Turn right (clockwise)", action: $clockwise)
@@ -980,5 +998,28 @@ extension Color {
                       Int(round(ns.redComponent * 255)),
                       Int(round(ns.greenComponent * 255)),
                       Int(round(ns.blueComponent * 255)))
+    }
+
+    /// Rounds a "RRGGBB" hex string down to what the device's 16-bit
+    /// RGB565 tile panel can actually display (5 red bits, 6 green, 5
+    /// blue) and back up, matching the exact bit truncation TileRenderer
+    /// uses when it packs pixels for the wire. LEDs are true 8-bit and do
+    /// not need this; only the tile panel is display-limited. Without this
+    /// the on-screen preview shows colors the hardware cannot reproduce.
+    static func quantizedToTilePanel(hex: String) -> Color {
+        var h = hex.trimmingCharacters(in: .alphanumerics.inverted)
+        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
+        var v: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&v)
+        let r8 = UInt8((v >> 16) & 0xFF), g8 = UInt8((v >> 8) & 0xFF), b8 = UInt8(v & 0xFF)
+
+        let r5 = (r8 & 0xF8) >> 3, g6 = (g8 & 0xFC) >> 2, b5 = b8 >> 3
+        let rOut = (r5 << 3) | (r5 >> 2)
+        let gOut = (g6 << 2) | (g6 >> 4)
+        let bOut = (b5 << 3) | (b5 >> 2)
+
+        return Color(
+            red: Double(rOut) / 255, green: Double(gOut) / 255, blue: Double(bOut) / 255
+        )
     }
 }
