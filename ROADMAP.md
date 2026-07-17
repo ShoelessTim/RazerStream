@@ -75,9 +75,12 @@ forks and sends pull requests; nothing about his workflow changes.
 
 ## Track 4: Features (post-polish)
 
-1. App switching profiles: watch the frontmost app (NSWorkspace notifications)
-   and auto-switch to a page or profile mapped to it; per-app mapping editor
-   in Settings; manual override always wins
+1. [x] App switching pages (shipped v1.2.0): watches the frontmost app via
+   NSWorkspace activation notifications and switches to its mapped page;
+   Settings > Apps has the mapping editor; a manual page change always
+   sticks since nothing re-asserts the mapping until the next real app
+   switch. Scoped to page-per-app within the current profile rather than a
+   full profile switcher, matching what was actually needed.
 2. Profile import and export
    - Native: single .razerstream JSON file for sharing layouts (drag in, drag out)
    - Elgato Stream Deck: .streamDeckProfile is a zip of manifest JSON plus
