@@ -306,7 +306,7 @@ extension ContentView {
     // MARK: - Device mirror
 
     private var deviceMirror: some View {
-        let page = store.currentPage
+        let page = store.resolvedCurrentPage
         return HStack(spacing: Self.knobGutter) {
             knobColumn(indices: [0, 1, 2], page: page)
             tileGrid(page: page)
@@ -925,10 +925,18 @@ struct KnobInspector: View {
     @State private var counterClockwise: ControlAction = .none
     @State private var press: ControlAction = .none
     @State private var showSymbolPicker = false
+    @State private var isGlobal = false
+    @State private var rotationMode: KnobRotationMode = .none
 
     var body: some View {
         Form {
             Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
+                Toggle("Same knob on every page", isOn: $isGlobal)
+                if isGlobal {
+                    Text("Pinned: editing this knob updates it everywhere, not just this page.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Picker("Content", selection: $liveContent) {
                     Text("Static").tag(LiveContent.none)
                     Text("Clock").tag(LiveContent.clock)
@@ -969,8 +977,26 @@ struct KnobInspector: View {
                 }
             }
             Section("Actions") {
-                ActionEditor(title: "Turn right (clockwise)", action: $clockwise)
-                ActionEditor(title: "Turn left (counter-clockwise)", action: $counterClockwise)
+                Picker("Rotation", selection: $rotationMode) {
+                    Text("None").tag(KnobRotationMode.none)
+                    Text("Volume").tag(KnobRotationMode.volume)
+                    Text("Screen Brightness").tag(KnobRotationMode.brightness)
+                    Text("Custom…").tag(KnobRotationMode.custom)
+                }
+                .onChange(of: rotationMode) { _, newMode in
+                    guard newMode != .custom else { return }
+                    let pair = KnobRotationMode.actions(for: newMode, clockwiseIncreases: KnobDirection.clockwiseIncreases)
+                    clockwise = pair.clockwise
+                    counterClockwise = pair.counterClockwise
+                }
+                if rotationMode == .custom {
+                    ActionEditor(title: "Turn right (clockwise)", action: $clockwise)
+                    ActionEditor(title: "Turn left (counter-clockwise)", action: $counterClockwise)
+                } else if rotationMode != .none {
+                    Text(rotationDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 ActionEditor(title: "Press", action: $press)
             }
             Button("Apply") { apply() }
@@ -985,8 +1011,16 @@ struct KnobInspector: View {
         .onChange(of: store.currentPageIndex) { loadCurrent() }
     }
 
+    private var rotationDescription: String {
+        let right = KnobDirection.clockwiseIncreases ? "raises" : "lowers"
+        let left = KnobDirection.clockwiseIncreases ? "lowers" : "raises"
+        let noun = rotationMode == .volume ? "the volume" : "the screen brightness"
+        return "Turning right \(right) \(noun); left \(left) it. Change the direction in Settings > Device."
+    }
+
     private func loadCurrent() {
-        let knob = store.currentPage.knobs[knobIndex]
+        isGlobal = store.isKnobGlobal(knobIndex)
+        let knob = store.knobConfig(knobIndex)
         label = knob.label
         sfSymbol = knob.sfSymbol ?? ""
         imagePath = knob.imagePath ?? ""
@@ -995,21 +1029,23 @@ struct KnobInspector: View {
         clockwise = knob.clockwise
         counterClockwise = knob.counterClockwise
         press = knob.press
+        rotationMode = KnobRotationMode.detect(clockwise: knob.clockwise, counterClockwise: knob.counterClockwise)
     }
 
     private func apply() {
-        store.updateCurrentPage { page in
-            page.knobs[knobIndex] = KnobConfig(
-                label: label,
-                sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
-                imagePath: imagePath.isEmpty ? nil : imagePath,
-                iconTint: iconTint,
-                liveContent: liveContent,
-                clockwise: clockwise,
-                counterClockwise: counterClockwise,
-                press: press
-            )
+        if isGlobal != store.isKnobGlobal(knobIndex) {
+            store.setKnobGlobal(knobIndex, isGlobal)
         }
+        store.updateKnob(knobIndex, KnobConfig(
+            label: label,
+            sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
+            imagePath: imagePath.isEmpty ? nil : imagePath,
+            iconTint: iconTint,
+            liveContent: liveContent,
+            clockwise: clockwise,
+            counterClockwise: counterClockwise,
+            press: press
+        ))
         deviceManager.pushCurrentPage()
     }
 }

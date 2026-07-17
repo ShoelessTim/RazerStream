@@ -116,7 +116,7 @@ final class DeviceManager: ObservableObject {
     private func handle(_ event: DeviceEvent) {
         lastEvent = event.description
         guard let store else { return }
-        let page = store.currentPage
+        let page = store.resolvedCurrentPage
 
         switch event {
         case .connected:
@@ -286,7 +286,7 @@ final class DeviceManager: ObservableObject {
     func pushCurrentPage(choreography: Bool = false) {
         guard let device, let store else { return }
         let profile = store.activeProfile
-        let page = store.currentPage
+        let page = store.resolvedCurrentPage
 
         // Pace writes; blasting framebuffers back to back overruns the
         // device's serial buffer and nothing renders

@@ -12,11 +12,12 @@ struct IconPicker: View {
     @EnvironmentObject var packManager: IconPackManager
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
-    @State private var selectedTab = "system"
+    @State private var selectedTab = RecentIcons.items.isEmpty ? "system" : "recent"
 
     var body: some View {
         VStack(spacing: 10) {
             Picker("", selection: $selectedTab) {
+                Text("Recent").tag("recent")
                 Text("System").tag("system")
                 ForEach(packManager.packs) { pack in
                     Text(pack.name).tag(pack.id)
@@ -28,7 +29,9 @@ struct IconPicker: View {
             TextField("Search icons…", text: $search)
                 .textFieldStyle(.roundedBorder)
 
-            if selectedTab == "system" {
+            if selectedTab == "recent" {
+                recentGrid
+            } else if selectedTab == "system" {
                 systemGrid
             } else if let pack = packManager.packs.first(where: { $0.id == selectedTab }) {
                 packGrid(pack)
@@ -53,6 +56,55 @@ struct IconPicker: View {
         }
         .padding()
         .frame(width: 520, height: 460)
+    }
+
+    // MARK: Recent
+
+    private var filteredRecents: [RecentIcon] {
+        let all = RecentIcons.items
+        guard !search.isEmpty else { return all }
+        return all.filter {
+            ($0.symbol ?? ($0.imagePath as NSString?)?.lastPathComponent ?? "")
+                .localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    private var recentGrid: some View {
+        ScrollView {
+            if filteredRecents.isEmpty {
+                Text(RecentIcons.items.isEmpty ? "Icons you pick will show up here." : "No matches.")
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 40)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 10) {
+                    ForEach(Array(filteredRecents.enumerated()), id: \.offset) { _, recent in
+                        Button {
+                            if let symbol = recent.symbol {
+                                pickSymbol(symbol)
+                            } else if let path = recent.imagePath {
+                                pickPackIcon(IconPack.IconEntry(name: (path as NSString).lastPathComponent, path: path))
+                            }
+                        } label: {
+                            Group {
+                                if let symbol = recent.symbol {
+                                    Image(systemName: symbol).font(.system(size: 20))
+                                } else if let path = recent.imagePath, let img = IconThumbnails.image(forPath: path) {
+                                    Image(nsImage: img)
+                                        .renderingMode(recent.tint ? .template : .original)
+                                } else {
+                                    Image(systemName: "questionmark.square.dashed")
+                                }
+                            }
+                            .frame(width: 40, height: 40)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
+                        }
+                        .buttonStyle(.plain)
+                        .help(recent.symbol ?? (recent.imagePath.map { ($0 as NSString).lastPathComponent } ?? ""))
+                    }
+                }
+                .padding(4)
+            }
+        }
     }
 
     // MARK: System (SF Symbols)
@@ -117,6 +169,7 @@ struct IconPicker: View {
         symbol = name
         imagePath = ""
         tintIcon = false
+        RecentIcons.record(symbol: name, imagePath: nil, tint: false)
         dismiss()
     }
 
@@ -125,6 +178,7 @@ struct IconPicker: View {
         symbol = ""
         // Mono SVG packs (stroke currentColor) need a white tint on dark tiles
         tintIcon = icon.path.lowercased().hasSuffix(".svg")
+        RecentIcons.record(symbol: nil, imagePath: icon.path, tint: tintIcon)
         dismiss()
     }
 }

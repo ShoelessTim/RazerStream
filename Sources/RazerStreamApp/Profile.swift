@@ -206,15 +206,27 @@ struct Profile: Codable, Equatable, Identifiable {
     var appSwitchingEnabled: Bool = false
     var appPageMappings: [String: String] = [:]   // bundle ID -> Page.id.uuidString
 
+    // A knob can be pinned so its config is shared across every page instead
+    // of each page having its own; `knobIsGlobal[i]` gates whether knob i
+    // reads/writes `globalKnobs[i]` instead of `pages[current].knobs[i]`.
+    // Lives on Profile (like brightness), not Page, since "same on every
+    // page" only means something at the profile level.
+    var globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6)
+    var knobIsGlobal: [Bool] = Array(repeating: false, count: 6)
+
     init(id: UUID = UUID(), name: String = "Default", pages: [Page] = [Page(name: "Page 1")],
          brightness: UInt8 = 8, appSwitchingEnabled: Bool = false,
-         appPageMappings: [String: String] = [:]) {
+         appPageMappings: [String: String] = [:],
+         globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6),
+         knobIsGlobal: [Bool] = Array(repeating: false, count: 6)) {
         self.id = id
         self.name = name
         self.pages = pages
         self.brightness = brightness
         self.appSwitchingEnabled = appSwitchingEnabled
         self.appPageMappings = appPageMappings
+        self.globalKnobs = globalKnobs
+        self.knobIsGlobal = knobIsGlobal
     }
 
     // Tolerant decoding so profiles saved before this feature keep loading;
@@ -228,6 +240,10 @@ struct Profile: Codable, Equatable, Identifiable {
         brightness = try c.decodeIfPresent(UInt8.self, forKey: .brightness) ?? 8
         appSwitchingEnabled = try c.decodeIfPresent(Bool.self, forKey: .appSwitchingEnabled) ?? false
         appPageMappings = try c.decodeIfPresent([String: String].self, forKey: .appPageMappings) ?? [:]
+        globalKnobs = try c.decodeIfPresent([KnobConfig].self, forKey: .globalKnobs)
+            ?? Array(repeating: KnobConfig(), count: 6)
+        knobIsGlobal = try c.decodeIfPresent([Bool].self, forKey: .knobIsGlobal)
+            ?? Array(repeating: false, count: 6)
     }
 }
 
@@ -246,6 +262,97 @@ final class ProfileStore: ObservableObject {
         let pages = activeProfile.pages
         guard !pages.isEmpty else { return Page() }
         return pages[min(currentPageIndex, pages.count - 1)]
+    }
+
+    /// `currentPage` with any globally-pinned knobs substituted in. Use this
+    /// (not `currentPage`) wherever a page is actually dispatched to the
+    /// device or mirrored in the app window, since a pinned knob's real
+    /// config lives in `globalKnobs`, not inside the page itself.
+    var resolvedCurrentPage: Page {
+        var page = currentPage
+        let profile = activeProfile
+        for i in page.knobs.indices
+        where profile.knobIsGlobal.indices.contains(i) && profile.knobIsGlobal[i]
+            && profile.globalKnobs.indices.contains(i) {
+            page.knobs[i] = profile.globalKnobs[i]
+        }
+        return page
+    }
+
+    func isKnobGlobal(_ index: Int) -> Bool {
+        activeProfile.knobIsGlobal.indices.contains(index) && activeProfile.knobIsGlobal[index]
+    }
+
+    /// The knob config that's actually in effect right now for `index`,
+    /// whether it comes from the current page or a pinned global slot.
+    func knobConfig(_ index: Int) -> KnobConfig {
+        let profile = activeProfile
+        if isKnobGlobal(index), profile.globalKnobs.indices.contains(index) {
+            return profile.globalKnobs[index]
+        }
+        return currentPage.knobs.indices.contains(index) ? currentPage.knobs[index] : KnobConfig()
+    }
+
+    /// Writes a knob's config to wherever it currently lives: the global
+    /// slot if pinned, otherwise just the current page.
+    func updateKnob(_ index: Int, _ newValue: KnobConfig) {
+        if isKnobGlobal(index) {
+            updateActive { profile in
+                guard profile.globalKnobs.indices.contains(index) else { return }
+                profile.globalKnobs[index] = newValue
+            }
+        } else {
+            updateCurrentPage { page in
+                guard page.knobs.indices.contains(index) else { return }
+                page.knobs[index] = newValue
+            }
+        }
+    }
+
+    /// Pins or unpins a knob. Pinning seeds the global slot from whatever is
+    /// on the current page right now, so nothing is lost; unpinning writes
+    /// the (possibly since-edited) global value back down into just the
+    /// current page, for the same reason.
+    func setKnobGlobal(_ index: Int, _ isGlobal: Bool) {
+        let pageIdx = currentPageIndex
+        updateActive { profile in
+            guard profile.knobIsGlobal.indices.contains(index),
+                  profile.globalKnobs.indices.contains(index),
+                  profile.pages.indices.contains(pageIdx)
+            else { return }
+            if isGlobal {
+                profile.globalKnobs[index] = profile.pages[pageIdx].knobs[index]
+            } else {
+                profile.pages[pageIdx].knobs[index] = profile.globalKnobs[index]
+            }
+            profile.knobIsGlobal[index] = isGlobal
+        }
+    }
+
+    /// Re-derives clockwise/counterClockwise for every knob currently in
+    /// Volume or Brightness rotation mode, across every profile, page, and
+    /// pinned global slot — called when the handedness setting changes in
+    /// Settings > Device, so "consistent across all experiences" actually
+    /// holds instead of only affecting knobs edited after the fact.
+    func reapplyKnobDirection() {
+        func reassign(_ knob: inout KnobConfig) {
+            let mode = KnobRotationMode.detect(clockwise: knob.clockwise, counterClockwise: knob.counterClockwise)
+            guard mode == .volume || mode == .brightness else { return }
+            let pair = KnobRotationMode.actions(for: mode, clockwiseIncreases: KnobDirection.clockwiseIncreases)
+            knob.clockwise = pair.clockwise
+            knob.counterClockwise = pair.counterClockwise
+        }
+        for pIdx in profiles.indices {
+            for pageIdx in profiles[pIdx].pages.indices {
+                for kIdx in profiles[pIdx].pages[pageIdx].knobs.indices {
+                    reassign(&profiles[pIdx].pages[pageIdx].knobs[kIdx])
+                }
+            }
+            for kIdx in profiles[pIdx].globalKnobs.indices {
+                reassign(&profiles[pIdx].globalKnobs[kIdx])
+            }
+        }
+        save()
     }
 
     private var storeURL: URL {

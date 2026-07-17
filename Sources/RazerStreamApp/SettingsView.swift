@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var brightness: Double = 8
     @State private var hapticsEnabled = HapticFeedback.isEnabled
     @State private var hapticPattern = HapticFeedback.pattern
+    @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
 
     var body: some View {
         TabView {
@@ -86,6 +87,22 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker("Turning right (clockwise)", selection: $clockwiseIncreases) {
+                    Text("Increases").tag(true)
+                    Text("Decreases").tag(false)
+                }
+                .onChange(of: clockwiseIncreases) { _, v in
+                    KnobDirection.clockwiseIncreases = v
+                    store.reapplyKnobDirection()
+                    deviceManager.pushCurrentPage()
+                }
+            } footer: {
+                Text("Applies to every knob set to Volume or Brightness rotation, on every page and profile.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button {
                     deviceManager.testDevice()
                 } label: {
@@ -95,7 +112,10 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { brightness = Double(store.activeProfile.brightness) }
+        .onAppear {
+            brightness = Double(store.activeProfile.brightness)
+            clockwiseIncreases = KnobDirection.clockwiseIncreases
+        }
     }
 
     // MARK: Icons
