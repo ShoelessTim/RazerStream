@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import RazerStreamKit
 
 // Standard macOS Settings window (Cmd+comma). Grouped Form; HIG styling.
 
@@ -9,11 +10,14 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var brightness: Double = 8
+    @State private var hapticsEnabled = HapticFeedback.isEnabled
+    @State private var hapticPattern = HapticFeedback.pattern
 
     var body: some View {
         TabView {
             general.tabItem { Label("General", systemImage: "gearshape") }
             device.tabItem { Label("Device", systemImage: "rectangle.grid.3x2") }
+            haptics.tabItem { Label("Haptics", systemImage: "waveform") }
             apps.tabItem { Label("Apps", systemImage: "square.stack.3d.up") }
             icons.tabItem { Label("Icons", systemImage: "photo.on.rectangle.angled") }
             history.tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
@@ -135,6 +139,40 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("Any folder of PNG or SVG files becomes a searchable tab in the icon library; Stream Deck icon packs work as is.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    // MARK: Haptics
+
+    private var haptics: some View {
+        Form {
+            Toggle("Vibrate on button and touch presses", isOn: $hapticsEnabled)
+                .onChange(of: hapticsEnabled) { HapticFeedback.isEnabled = $1 }
+
+            Section {
+                Picker("Pattern", selection: $hapticPattern) {
+                    Text("Short").tag(Haptic.short)
+                    Text("Medium").tag(Haptic.medium)
+                    Text("Long").tag(Haptic.long)
+                    Text("Very Long").tag(Haptic.veryLong)
+                    Text("Buzz").tag(Haptic.buzz)
+                    Text("Rumble 1").tag(Haptic.rumble1)
+                    Text("Rumble 2").tag(Haptic.rumble2)
+                    Text("Rise and Fall").tag(Haptic.riseFall)
+                }
+                .disabled(!hapticsEnabled)
+                .onChange(of: hapticPattern) { HapticFeedback.pattern = $1 }
+
+                Button("Test") {
+                    deviceManager.testHaptic(hapticPattern)
+                }
+                .disabled(!hapticsEnabled || !deviceManager.connected)
+            } footer: {
+                Text("Fires once whenever you press a physical button, a knob, or tap the touchscreen; not while turning a knob.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

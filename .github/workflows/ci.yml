@@ -25,5 +25,6 @@ jobs:
       - name: Build
         run: swift build -v
 
-      - name: Test
+      - name: Test RazerStreamKit
         run: swift test -v
+        working-directory: Packages/RazerStreamKit

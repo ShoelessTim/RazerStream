@@ -140,6 +140,7 @@ final class DeviceManager: ObservableObject {
             // Device enumerates knob presses first: IDs 1–3 left knobs
             // top→bottom, 4–6 right knobs top→bottom, then 7–14 are the
             // eight physical buttons left→right. (Verified on hardware.)
+            if pressed { HapticFeedback.trigger(on: device) }
             if id >= 1 && id <= 6 {
                 if pressed { run(page.knobs[id - 1].press) }
             } else if id >= 7 && id <= 14 {
@@ -161,6 +162,7 @@ final class DeviceManager: ObservableObject {
             guard col >= 0, col < cols, row >= 0, row < RazerStreamController.buttonRows else { return }
             let idx = row * cols + col
             activeTouches[touchID] = idx
+            HapticFeedback.trigger(on: device)
             handleTilePress(index: idx, page: page)
 
         case .touchEnd(_, _, let touchID):
@@ -325,6 +327,14 @@ final class DeviceManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
+    }
+
+    /// Fires a haptic pattern once, on demand, from Settings > Haptics; goes
+    /// straight to the device rather than through HapticFeedback.trigger, so
+    /// it works regardless of the enabled toggle (the Test button is itself
+    /// gated on that toggle in the UI).
+    func testHaptic(_ pattern: Haptic) {
+        try? device?.send(.vibrate(pattern))
     }
 
     /// Full self-test: a vivid pattern across every tile and knob strip while
