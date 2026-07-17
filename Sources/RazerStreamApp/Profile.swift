@@ -337,7 +337,7 @@ final class ProfileStore: ObservableObject {
     func reapplyKnobDirection() {
         func reassign(_ knob: inout KnobConfig) {
             let mode = KnobRotationMode.detect(clockwise: knob.clockwise, counterClockwise: knob.counterClockwise)
-            guard mode == .volume || mode == .brightness else { return }
+            guard mode != .none && mode != .custom else { return }
             let pair = KnobRotationMode.actions(for: mode, clockwiseIncreases: KnobDirection.clockwiseIncreases)
             knob.clockwise = pair.clockwise
             knob.counterClockwise = pair.counterClockwise

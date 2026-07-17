@@ -16,20 +16,47 @@ enum KnobDirection {
 }
 
 // Simplifies knob rotation configuration: instead of picking an arbitrary
-// action for clockwise and another for counterclockwise, Volume and
-// Brightness are single choices whose direction is derived from
+// action for clockwise and another for counterclockwise, each of these is a
+// single choice whose direction is derived from
 // KnobDirection.clockwiseIncreases. "Custom" is the escape hatch for
-// anything else (page navigation, arbitrary actions per direction).
-enum KnobRotationMode: Equatable {
+// anything else, or any pairing not covered by a preset here.
+enum KnobRotationMode: Equatable, CaseIterable {
     case none
     case volume
     case brightness
+    case pageNavigation
+    case mediaTrack
     case custom
+
+    var displayName: String {
+        switch self {
+        case .none:          return "None"
+        case .volume:        return "Volume"
+        case .brightness:    return "Screen Brightness"
+        case .pageNavigation: return "Page Navigation"
+        case .mediaTrack:    return "Next / Previous Track"
+        case .custom:        return "Custom…"
+        }
+    }
+
+    /// What "clockwise" means for this preset, for the direction caption;
+    /// .none/.custom have no fixed meaning so callers shouldn't ask.
+    var increaseVerb: (clockwise: String, counterClockwise: String)? {
+        switch self {
+        case .volume:         return ("raises the volume", "lowers it")
+        case .brightness:     return ("brightens the screen", "dims it")
+        case .pageNavigation: return ("goes to the next page", "goes back")
+        case .mediaTrack:     return ("skips to the next track", "goes to the previous one")
+        case .none, .custom:  return nil
+        }
+    }
 
     static func detect(clockwise: ControlAction, counterClockwise: ControlAction) -> KnobRotationMode {
         if clockwise == .none && counterClockwise == .none { return .none }
         if isPair(clockwise, counterClockwise, .volumeUp, .volumeDown) { return .volume }
         if isPair(clockwise, counterClockwise, .brightnessUp, .brightnessDown) { return .brightness }
+        if isPair(clockwise, counterClockwise, .nextPage, .prevPage) { return .pageNavigation }
+        if isPair(clockwise, counterClockwise, .mediaNext, .mediaPrevious) { return .mediaTrack }
         return .custom
     }
 
@@ -41,6 +68,10 @@ enum KnobRotationMode: Equatable {
             return clockwiseIncreases ? (.volumeUp, .volumeDown) : (.volumeDown, .volumeUp)
         case .brightness:
             return clockwiseIncreases ? (.brightnessUp, .brightnessDown) : (.brightnessDown, .brightnessUp)
+        case .pageNavigation:
+            return clockwiseIncreases ? (.nextPage, .prevPage) : (.prevPage, .nextPage)
+        case .mediaTrack:
+            return clockwiseIncreases ? (.mediaNext, .mediaPrevious) : (.mediaPrevious, .mediaNext)
         case .custom:
             return (.none, .none)   // caller should leave existing fields alone in this case
         }

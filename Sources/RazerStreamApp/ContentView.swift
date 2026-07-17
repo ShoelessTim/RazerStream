@@ -978,10 +978,9 @@ struct KnobInspector: View {
             }
             Section("Actions") {
                 Picker("Rotation", selection: $rotationMode) {
-                    Text("None").tag(KnobRotationMode.none)
-                    Text("Volume").tag(KnobRotationMode.volume)
-                    Text("Screen Brightness").tag(KnobRotationMode.brightness)
-                    Text("Custom…").tag(KnobRotationMode.custom)
+                    ForEach(KnobRotationMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
                 }
                 .onChange(of: rotationMode) { _, newMode in
                     guard newMode != .custom else { return }
@@ -1012,10 +1011,11 @@ struct KnobInspector: View {
     }
 
     private var rotationDescription: String {
-        let right = KnobDirection.clockwiseIncreases ? "raises" : "lowers"
-        let left = KnobDirection.clockwiseIncreases ? "lowers" : "raises"
-        let noun = rotationMode == .volume ? "the volume" : "the screen brightness"
-        return "Turning right \(right) \(noun); left \(left) it. Change the direction in Settings > Device."
+        guard let verbs = rotationMode.increaseVerb else { return "" }
+        let (right, left) = KnobDirection.clockwiseIncreases
+            ? (verbs.clockwise, verbs.counterClockwise)
+            : (verbs.counterClockwise, verbs.clockwise)
+        return "Turning right \(right); left \(left). Change the direction in Settings > Device."
     }
 
     private func loadCurrent() {
