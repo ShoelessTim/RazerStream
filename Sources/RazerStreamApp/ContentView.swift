@@ -1,9 +1,23 @@
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 import RazerStreamKit
 
 enum Selection: Equatable {
     case tile(Int), knob(Int), button(Int)
+}
+
+/// Drag payload for reordering tiles within the grid; in-process only, so a
+/// synthesized content type (not registered in Info.plist) is sufficient.
+struct TileDragPayload: Codable, Transferable {
+    let sourceIndex: Int
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .razerStreamTile)
+    }
+}
+
+extension UTType {
+    static let razerStreamTile = UTType(exportedAs: "org.community.razerstream.tile")
 }
 
 struct ContentView: View {
@@ -11,6 +25,7 @@ struct ContentView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @State private var selection: Selection?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var dragTargetTileIndex: Int?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -260,10 +275,24 @@ extension ContentView {
             .frame(width: 84, height: 84)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(selection == .tile(index) ? Color.accentColor : .clear, lineWidth: 3)
+                    .stroke(
+                        selection == .tile(index) ? Color.accentColor
+                        : (dragTargetTileIndex == index ? Color.accentColor.opacity(0.5) : .clear),
+                        lineWidth: 3
+                    )
             )
         }
         .buttonStyle(.plain)
+        .draggable(TileDragPayload(sourceIndex: index))
+        .dropDestination(for: TileDragPayload.self) { items, _ in
+            guard let payload = items.first else { return false }
+            store.moveTile(from: payload.sourceIndex, to: index)
+            deviceManager.pushCurrentPage()
+            return true
+        } isTargeted: { targeted in
+            dragTargetTileIndex = targeted ? index
+                : (dragTargetTileIndex == index ? nil : dragTargetTileIndex)
+        }
     }
 
     /// Mirrors TileRenderer's clock face in the app window; ticks on its own

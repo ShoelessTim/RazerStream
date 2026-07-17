@@ -300,6 +300,21 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    /// Moves a tile on the current page from one slot to another; everything
+    /// between the two slots shifts to make room, the same way Home Screen
+    /// icon rearrangement works. `to` is the tile's final index after the
+    /// move, not an insertion-before offset.
+    func moveTile(from: Int, to: Int) {
+        updateCurrentPage { page in
+            guard from != to,
+                  page.tiles.indices.contains(from),
+                  page.tiles.indices.contains(to)
+            else { return }
+            let item = page.tiles.remove(at: from)
+            page.tiles.insert(item, at: to)
+        }
+    }
+
     private struct SavedState: Codable {
         var profiles: [Profile]
         var activeProfileID: UUID?
