@@ -41,13 +41,14 @@ Not done in this pass, intentionally deferred: profile management UI (see
 Track 4, app-switching profiles), native toolbar redesign, About window
 polish, notch-style HUD confirmations.
 
-## Track 2: Connect choreography (the feedback Tim loves)
+## Track 2: Connect choreography (the feedback Tim loves) — shipped
 
-1. LED cascade on connect: sweep buttons 2 through 8 in a color wave right after
-   the tile sweep finishes; doubles as a hardware self-test of every LED
-2. Brightness fade-in on connect instead of a hard jump
-3. Optional haptic tick when the device finishes loading a page
-4. Same cascade runs on demand from the menu bar as "Test device"
+1. [x] LED cascade on connect: sweep buttons 2 through 8 in a color wave right
+   after the tile sweep finishes; doubles as a hardware self-test of every LED
+2. [x] Brightness fade-in on connect instead of a hard jump (shipped v1.4.1)
+3. [x] Haptic tick when a page finishes loading, but only on an actual page
+   change, not every redraw (shipped v1.4.1)
+4. [x] Same cascade runs on demand from the menu bar as "Test device"
 
 ## Track 3: Open source release
 
@@ -82,7 +83,10 @@ forks and sends pull requests; nothing about his workflow changes.
    switch. Scoped to page-per-app within the current profile rather than a
    full profile switcher, matching what was actually needed.
 2. Profile import and export
-   - Native: single .razerstream JSON file for sharing layouts (drag in, drag out)
+   - [x] Native: single .razerstream JSON file for sharing layouts, via
+     Settings > History > Export/Import (shipped v1.4.1); not yet wired to
+     Finder double-click-to-open, since that needs document-based app
+     plumbing beyond what a Settings-panel export/import needed
    - Elgato Stream Deck: .streamDeckProfile is a zip of manifest JSON plus
      button images; map 15-key layouts onto our 12 tiles with a review step
    - Loupedeck 6.3: import what we can parse from local profile storage so
@@ -93,12 +97,19 @@ forks and sends pull requests; nothing about his workflow changes.
    - User icon packs: point the app at any folder of PNG/SVG files and it
      becomes a searchable library tab; this also covers Stream Deck icon packs
    - License text shipped with each bundled pack
-4. Live tiles: clock, now playing with album art, CPU/RAM meter, calendar next-up;
-   refresh loop redraws only dirty tiles
-5. Haptics: vibrate patterns per action type (the hardware command already exists)
-6. Touch gestures: two-finger swipe on the screen switches pages
-7. Knob acceleration: fast turns scale the action (volume jumps by more)
-8. Device sleep: dim after N minutes idle; wake on any input
+4. Live tiles: [x] clock (shipped v1.1.0); still open: now playing with album
+   art, CPU/RAM meter, calendar next-up; refresh loop redraws only dirty tiles
+5. [x] Haptics: vibrate patterns per action type (shipped v1.4.0); fires on
+   button/knob press and touch, plus a Settings > Haptics tab with a pattern
+   picker and test button
+6. [x] Touch gestures: two-finger swipe on the screen switches pages (shipped
+   v1.4.1); known limitation, the swipe's starting touches can also fire
+   whatever tile actions are under each finger, since a touch's action fires
+   on press-down same as any other tap
+7. [x] Knob acceleration: fast turns scale the action, volume/brightness step
+   3x instead of 1x on quick consecutive turns (shipped v1.4.1)
+8. [x] Device sleep: dim after N minutes idle, wake on any input; off by
+   default, Settings > Device > "Dim after inactivity" (shipped v1.4.1)
 9. Webhooks and Home Assistant/MQTT actions
 10. Plugin API: action providers as separate processes or scripts
 
