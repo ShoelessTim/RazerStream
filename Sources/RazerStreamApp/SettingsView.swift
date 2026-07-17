@@ -15,6 +15,7 @@ struct SettingsView: View {
             general.tabItem { Label("General", systemImage: "gearshape") }
             device.tabItem { Label("Device", systemImage: "rectangle.grid.3x2") }
             icons.tabItem { Label("Icons", systemImage: "photo.on.rectangle.angled") }
+            history.tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
             about.tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 480, height: 360)
@@ -138,6 +139,63 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: History
+
+    @State private var versionToRestore: ProfileStore.ProfileVersion?
+
+    private var history: some View {
+        Form {
+            Section {
+                Button {
+                    store.duplicateProfile(store.activeProfile.id)
+                } label: {
+                    Label("Duplicate Current Profile", systemImage: "plus.square.on.square")
+                }
+            } footer: {
+                Text("Makes a named copy you can keep as a checkpoint; edits to the original will not affect it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                let versions = store.listVersions()
+                if versions.isEmpty {
+                    Text("No saved versions yet")
+                        .foregroundStyle(.secondary)
+                } else {
+                    List(versions.prefix(20)) { version in
+                        LabeledContent {
+                            Button("Restore") { versionToRestore = version }
+                                .font(.caption)
+                        } label: {
+                            Text(version.date, format: .dateTime.month().day().hour().minute().second())
+                        }
+                    }
+                    .frame(minHeight: 120, maxHeight: 200)
+                }
+            } header: {
+                Text("Previous Versions")
+            } footer: {
+                Text("RazerStream saves a snapshot every time you apply a change; restoring one becomes a new save point, so nothing already saved is ever lost.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .confirmationDialog(
+            "Restore this version?",
+            isPresented: Binding(get: { versionToRestore != nil }, set: { if !$0 { versionToRestore = nil } }),
+            presenting: versionToRestore
+        ) { version in
+            Button("Restore", role: .destructive) {
+                store.restoreVersion(version)
+                deviceManager.pushCurrentPage()
+            }
+        } message: { version in
+            Text("Replaces all profiles and pages with the version saved at \(version.date.formatted(date: .abbreviated, time: .standard)). The current state is saved first, so you can restore back to it afterward.")
+        }
     }
 
     // MARK: About

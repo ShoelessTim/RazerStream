@@ -241,9 +241,9 @@ final class ProfileStore: ObservableObject {
 
     func save() {
         let state = SavedState(profiles: profiles, activeProfileID: activeProfileID)
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: storeURL, options: .atomic)
-        }
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        try? data.write(to: storeURL, options: .atomic)
+        snapshotVersion(data)
     }
 
     func updateActive(_ mutate: (inout Profile) -> Void) {
@@ -313,6 +313,100 @@ final class ProfileStore: ObservableObject {
             let item = page.tiles.remove(at: from)
             page.tiles.insert(item, at: to)
         }
+    }
+
+    // MARK: - Version history
+    //
+    // Apple's own document apps never expose per-keystroke undo across a
+    // relaunch; they autosave continuously and let you step back through a
+    // browsable version history instead (File > Revert To > Browse All
+    // Versions). This is the same idea, sized for a single JSON file: every
+    // save snapshots the whole state, "Restore Previous Version" browses
+    // those snapshots, and "Duplicate Profile" is the manual named
+    // checkpoint (the equivalent of File > Duplicate).
+
+    private var versionsDir: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("RazerStream", isDirectory: true)
+            .appendingPathComponent("Versions", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    // Fixed-width, zero-padded fields sort lexicographically in the same
+    // order as chronologically, so filenames can be pruned without parsing.
+    private static let versionFilenameFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd_HH-mm-ss-SSS"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    // A bounded recent-snapshot history rather than true Time Machine style
+    // thinning (dense recent, sparse older); simpler, and still covers
+    // "I want to step back a few edits" without unbounded disk growth.
+    private let maxVersions = 20
+
+    private func snapshotVersion(_ data: Data) {
+        let name = Self.versionFilenameFormatter.string(from: Date()) + ".json"
+        try? data.write(to: versionsDir.appendingPathComponent(name), options: .atomic)
+        pruneVersions()
+    }
+
+    private func pruneVersions() {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: versionsDir, includingPropertiesForKeys: nil
+        )) ?? []
+        let newestFirst = files.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        if newestFirst.count > maxVersions {
+            for url in newestFirst[maxVersions...] {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
+
+    struct ProfileVersion: Identifiable, Equatable {
+        var id: URL { url }
+        let date: Date
+        let url: URL
+    }
+
+    /// Saved snapshots, newest first.
+    func listVersions() -> [ProfileVersion] {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: versionsDir, includingPropertiesForKeys: nil
+        )) ?? []
+        return files.compactMap { url -> ProfileVersion? in
+            let stem = url.deletingPathExtension().lastPathComponent
+            guard let date = Self.versionFilenameFormatter.date(from: stem) else { return nil }
+            return ProfileVersion(date: date, url: url)
+        }.sorted { $0.date > $1.date }
+    }
+
+    /// Restores profiles and the active profile id from a saved snapshot.
+    /// The state right before the restore is snapshotted first, so restoring
+    /// can never lose work; the restored state then becomes its own new
+    /// save point, the same way restoring from Time Machine behaves.
+    func restoreVersion(_ version: ProfileVersion) {
+        save()   // snapshot pre-restore state before overwriting anything
+
+        guard let data = try? Data(contentsOf: version.url),
+              let decoded = try? JSONDecoder().decode(SavedState.self, from: data)
+        else { return }
+        profiles = decoded.profiles
+        activeProfileID = decoded.activeProfileID
+        currentPageIndex = 0
+        save()
+    }
+
+    /// Explicit named checkpoint; the manual equivalent of File > Duplicate.
+    func duplicateProfile(_ id: UUID) {
+        guard let original = profiles.first(where: { $0.id == id }) else { return }
+        var copy = original
+        copy.id = UUID()
+        copy.name = "\(original.name) copy"
+        profiles.append(copy)
+        save()
     }
 
     private struct SavedState: Codable {
