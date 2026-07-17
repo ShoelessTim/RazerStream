@@ -38,41 +38,39 @@ struct ContentView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 170, ideal: 210, max: 280)
         } content: {
-            // The mirror represents fixed physical hardware, so it stays a
-            // constant size and is centered with generous margins rather
-            // than stretching to fill a larger window; extra space reads as
-            // intentional whitespace instead of the mirror looking lost.
-            VStack(spacing: 20) {
-                if !deviceManager.connected {
-                    Label("No device connected; edits still apply once one is plugged in.",
-                          systemImage: "cable.connector.slash")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .frame(maxWidth: .infinity)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                }
-
-                Spacer(minLength: 0)
-
+            // The mirror represents fixed physical hardware, so it is one
+            // fixed-size unit (knobs, tiles, and buttons locked together) that
+            // stays centered with generous margins. It lives in a ScrollView
+            // so that if the window is ever smaller than the unit, the mirror
+            // scrolls rather than clipping into the neighbouring columns.
+            ScrollView([.horizontal, .vertical]) {
                 VStack(spacing: 20) {
-                    deviceMirror
-                    physicalButtonRow
+                    if !deviceManager.connected {
+                        Label("No device connected; edits still apply once one is plugged in.",
+                              systemImage: "cable.connector.slash")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .frame(maxWidth: Self.mirrorWidth)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    deviceUnit
                 }
-
-                Spacer(minLength: 0)
+                .padding(28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(28)
-            .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: Self.mirrorWidth + 56)
             .animation(.easeInOut, value: deviceManager.connected)
         } detail: {
             inspector
-                .frame(minWidth: 300)
+                .navigationSplitViewColumnWidth(min: 300, ideal: 340, max: 380)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             statusBar
         }
-        .frame(minWidth: 900, minHeight: 560)
+        // Sized so all three columns fit at their minimums without ever
+        // compressing into each other (170 sidebar + 572 content + 300 detail)
+        .frame(minWidth: 1060, minHeight: 620)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -272,10 +270,27 @@ extension ContentView {
         }
     }
 
-    // Shared so physicalButtonRow's leading offset stays mathematically
-    // aligned with the knob column instead of a disconnected magic number.
+    // One source of truth for the mirror's geometry so every piece stays
+    // locked to every other piece; the tile grid, the knob columns, and the
+    // physical button row all derive their positions from these.
+    private static let tileSize: CGFloat = 84
+    private static let tileGap: CGFloat = 8
     private static let knobColumnWidth: CGFloat = 54
     private static let knobGutter: CGFloat = 24
+    // 4 tiles across plus 3 gaps between them
+    static let tileGridWidth: CGFloat = 4 * tileSize + 3 * tileGap        // 360
+    // left knob strip + gutter + tile grid + gutter + right knob strip
+    static let mirrorWidth: CGFloat = 2 * (knobColumnWidth + knobGutter) + tileGridWidth  // 516
+
+    /// The whole device as one rigid unit: knob columns, tile grid, and the
+    /// physical button row locked together so they can never drift apart.
+    private var deviceUnit: some View {
+        VStack(spacing: 20) {
+            deviceMirror
+            physicalButtonRow
+        }
+        .fixedSize()
+    }
 
     private func tileGrid(page: Page) -> some View {
         let cols = RazerStreamController.buttonColumns
@@ -410,46 +425,54 @@ extension ContentView {
 
     private var physicalButtonRow: some View {
         let page = store.currentPage
-        return HStack(spacing: 10) {
+        // The eight buttons span exactly the tile-grid width and are inset by
+        // one knob strip on each side, so the row is locked under the tiles
+        // and stays centered within the mirror unit no matter what.
+        return HStack(spacing: 0) {
             ForEach(0..<8, id: \.self) { i in
-                Button { selection = .button(i) } label: {
-                    ZStack {
-                        Circle()
-                            .fill(Color(hex: "222228"))
-                            .frame(width: 36, height: 36)
-                        // LED ring: green status light on button 1, configured color elsewhere
-                        Circle()
-                            .stroke(i == 0 ? Color.green : Color(hex: page.buttons[i].ledHex),
-                                    lineWidth: 2)
-                            .frame(width: 30, height: 30)
-                        if page.buttons[i].action != .none {
-                            Circle().fill(Color.accentColor).frame(width: 8, height: 8)
-                                .offset(y: 12)
-                        }
-                        Text("\(i + 1)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .overlay(
-                        Circle().stroke(
-                            selection == .button(i) ? Color.accentColor
-                            : (hoveredSelection == .button(i) ? Color.white.opacity(0.4) : .clear),
-                            lineWidth: 3
-                        )
-                    )
-                    .scaleEffect(hoveredSelection == .button(i) && selection != .button(i) ? 1.08 : 1.0)
-                }
-                .buttonStyle(.plain)
-                .onHover { isHovering in
-                    hoveredSelection = isHovering ? .button(i)
-                        : (hoveredSelection == .button(i) ? nil : hoveredSelection)
-                }
-                .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
-                .animation(.easeInOut(duration: 0.12), value: selection)
+                buttonView(index: i, page: page)
+                if i < 7 { Spacer(minLength: 0) }
             }
-            Spacer()
         }
-        .padding(.leading, Self.knobColumnWidth + Self.knobGutter)
+        .frame(width: Self.tileGridWidth)
+        .padding(.horizontal, Self.knobColumnWidth + Self.knobGutter)
+    }
+
+    private func buttonView(index i: Int, page: Page) -> some View {
+        Button { selection = .button(i) } label: {
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "222228"))
+                    .frame(width: 36, height: 36)
+                // LED ring: green status light on button 1, configured color elsewhere
+                Circle()
+                    .stroke(i == 0 ? Color.green : Color(hex: page.buttons[i].ledHex),
+                            lineWidth: 2)
+                    .frame(width: 30, height: 30)
+                if page.buttons[i].action != .none {
+                    Circle().fill(Color.accentColor).frame(width: 8, height: 8)
+                        .offset(y: 12)
+                }
+                Text("\(i + 1)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .overlay(
+                Circle().stroke(
+                    selection == .button(i) ? Color.accentColor
+                    : (hoveredSelection == .button(i) ? Color.white.opacity(0.4) : .clear),
+                    lineWidth: 3
+                )
+            )
+            .scaleEffect(hoveredSelection == .button(i) && selection != .button(i) ? 1.08 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering in
+            hoveredSelection = isHovering ? .button(i)
+                : (hoveredSelection == .button(i) ? nil : hoveredSelection)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
+        .animation(.easeInOut(duration: 0.12), value: selection)
     }
 
     // MARK: - Inspector

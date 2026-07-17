@@ -220,11 +220,7 @@ final class ProfileStore: ObservableObject {
     func load() {
         guard let data = try? Data(contentsOf: storeURL) else { return }
 
-        if let decoded = try? JSONDecoder().decode(SavedState.self, from: data) {
-            profiles = decoded.profiles
-            activeProfileID = decoded.activeProfileID
-            return
-        }
+        if applyDecoded(data) { return }
 
         // Migrate v0 format (flat tiles/knobs/buttons on Profile → single page)
         if let old = try? JSONDecoder().decode(OldSavedState.self, from: data) {
@@ -240,7 +236,35 @@ final class ProfileStore: ObservableObject {
             }
             activeProfileID = old.activeProfileID
             save()
+            return
         }
+
+        // The file exists but could not be read in any known format. Never
+        // silently discard it; the old behaviour returned empty here, and the
+        // initializer then overwrote the file with a fresh starter, destroying
+        // whatever was there. Instead, preserve the unreadable file for
+        // forensics and try to recover from the newest good version snapshot.
+        let corruptURL = storeURL.deletingPathExtension()
+            .appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.copyItem(at: storeURL, to: corruptURL)
+        NSLog("profiles.json unreadable; preserved at \(corruptURL.lastPathComponent), attempting version recovery")
+
+        for version in listVersions() {
+            if let vData = try? Data(contentsOf: version.url), applyDecoded(vData) {
+                NSLog("recovered from version snapshot \(version.url.lastPathComponent)")
+                save()
+                return
+            }
+        }
+        // Nothing recoverable; leave profiles empty so the initializer creates
+        // a starter, but the original file is safe under its .corrupt name.
+    }
+
+    private func applyDecoded(_ data: Data) -> Bool {
+        guard let decoded = try? JSONDecoder().decode(SavedState.self, from: data) else { return false }
+        profiles = decoded.profiles
+        activeProfileID = decoded.activeProfileID
+        return true
     }
 
     func save() {
