@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var selection: Selection?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var dragTargetTileIndex: Int?
+    @State private var hoveredSelection: Selection?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -33,12 +34,22 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 170, ideal: 210, max: 280)
         } content: {
             VStack(spacing: 14) {
+                if !deviceManager.connected {
+                    Label("No device connected; edits still apply once one is plugged in.",
+                          systemImage: "cable.connector.slash")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .frame(maxWidth: .infinity)
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                }
                 deviceMirror
                 physicalButtonRow
                 Spacer(minLength: 0)
             }
             .padding()
             .frame(minWidth: 480)
+            .animation(.easeInOut, value: deviceManager.connected)
         } detail: {
             inspector
                 .frame(minWidth: 300)
@@ -277,12 +288,22 @@ extension ContentView {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
                         selection == .tile(index) ? Color.accentColor
-                        : (dragTargetTileIndex == index ? Color.accentColor.opacity(0.5) : .clear),
+                        : (dragTargetTileIndex == index ? Color.accentColor.opacity(0.5)
+                           : (hoveredSelection == .tile(index) ? Color.white.opacity(0.4) : .clear)),
                         lineWidth: 3
                     )
             )
+            // Dock-style magnify on hover; a familiar Apple hover affordance
+            // for a grid of tappable tiles
+            .scaleEffect(hoveredSelection == .tile(index) && selection != .tile(index) ? 1.05 : 1.0)
         }
         .buttonStyle(.plain)
+        .onHover { isHovering in
+            hoveredSelection = isHovering ? .tile(index)
+                : (hoveredSelection == .tile(index) ? nil : hoveredSelection)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
+        .animation(.easeInOut(duration: 0.12), value: selection)
         .draggable(TileDragPayload(sourceIndex: index))
         .dropDestination(for: TileDragPayload.self) { items, _ in
             guard let payload = items.first else { return false }
@@ -330,10 +351,21 @@ extension ContentView {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "16161a")))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(selection == .knob(i) ? Color.accentColor : .clear, lineWidth: 3)
+                            .stroke(
+                                selection == .knob(i) ? Color.accentColor
+                                : (hoveredSelection == .knob(i) ? Color.white.opacity(0.4) : .clear),
+                                lineWidth: 3
+                            )
                     )
+                    .scaleEffect(hoveredSelection == .knob(i) && selection != .knob(i) ? 1.05 : 1.0)
                 }
                 .buttonStyle(.plain)
+                .onHover { isHovering in
+                    hoveredSelection = isHovering ? .knob(i)
+                        : (hoveredSelection == .knob(i) ? nil : hoveredSelection)
+                }
+                .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
+                .animation(.easeInOut(duration: 0.12), value: selection)
             }
         }
     }
@@ -361,10 +393,21 @@ extension ContentView {
                             .foregroundStyle(.white)
                     }
                     .overlay(
-                        Circle().stroke(selection == .button(i) ? Color.accentColor : .clear, lineWidth: 3)
+                        Circle().stroke(
+                            selection == .button(i) ? Color.accentColor
+                            : (hoveredSelection == .button(i) ? Color.white.opacity(0.4) : .clear),
+                            lineWidth: 3
+                        )
                     )
+                    .scaleEffect(hoveredSelection == .button(i) && selection != .button(i) ? 1.08 : 1.0)
                 }
                 .buttonStyle(.plain)
+                .onHover { isHovering in
+                    hoveredSelection = isHovering ? .button(i)
+                        : (hoveredSelection == .button(i) ? nil : hoveredSelection)
+                }
+                .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
+                .animation(.easeInOut(duration: 0.12), value: selection)
             }
             Spacer()
         }
