@@ -143,6 +143,9 @@ struct ContentView: View {
             Text(deviceManager.lastEvent)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
+            Text("v\(Self.appVersion)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -151,6 +154,10 @@ struct ContentView: View {
         .onReceive(axTimer) { _ in
             axGranted = ActionEngine.hasAccessibility
         }
+    }
+
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     }
 
     // MARK: - Sidebar (pages)
@@ -192,21 +199,40 @@ struct ContentView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            HStack {
-                Button {
-                    store.addPage()
-                    deviceManager.pushCurrentPage()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.secondary)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Classic Apple list accessory bar (System Settings, Login
+            // Items): a persistent +/- pair, not a hidden context menu.
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 0) {
+                    Button {
+                        store.addPage()
+                        deviceManager.pushCurrentPage()
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 22, height: 22)
+                    }
+                    .help("Add Page")
+
+                    Divider().frame(height: 12)
+
+                    Button {
+                        store.deletePage(store.currentPage.id)
+                        deviceManager.pushCurrentPage()
+                    } label: {
+                        Image(systemName: "minus")
+                            .frame(width: 22, height: 22)
+                    }
+                    .disabled(store.activeProfile.pages.count <= 1)
+                    .help("Remove Selected Page")
+
+                    Spacer()
                 }
                 .buttonStyle(.plain)
-                .help("Add Page")
-                Spacer()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
         }
     }
 }
