@@ -111,7 +111,43 @@ forks and sends pull requests; nothing about his workflow changes.
 8. [x] Device sleep: dim after N minutes idle, wake on any input; off by
    default, Settings > Device > "Dim after inactivity" (shipped v1.4.1)
 9. Webhooks and Home Assistant/MQTT actions
-10. Plugin API: action providers as separate processes or scripts
+10. Plugin API: action providers as separate processes or scripts. Concrete
+    requirements from a real use case (r/loupedeck, u/Cuica, 2026-07-16; a
+    Jellyfin media-player controller, migrating off a custom Loupedeck C#
+    plugin):
+    - Full-tile custom image drawing, not just label/icon/color config; a
+      plugin needs to hand over an actual bitmap per redraw
+    - High refresh rate for that custom content: an animated progress bar
+      spanning four tiles plus a scrolling "now playing" title wants
+      10 to 20fps, well past what a manual Apply-button edit needs
+    - The same full-image drawing capability on knob zones, not just tiles;
+      today's knob rendering (label + icon only) cannot do this at all
+    - Two-way data, not just write: reading external state (Jellyfin's
+      trickplay thumbnails for "next in queue") and writing it back (editing
+      a star rating from the deck)
+    - This all argues for a plugin being handed a raw pixel buffer per
+      button/knob zone on some interval, plus a channel to receive input
+      events back, rather than the current declarative TileConfig/KnobConfig
+      shape; a real design decision to make when this gets picked up, not
+      solved here
+
+## Community requests (r/loupedeck, v1.0 launch thread, 2026-07-16/17)
+
+1. Loupedeck CT support (u/c3p00). A different physical device from the
+   Razer Stream Controller this app targets (which is a rebranded Loupedeck
+   Live); CT has its own screen/button/dial layout and likely its own
+   protocol quirks. Not scoped or investigated at all yet; would need a
+   serial capture from an actual CT owner before anything concrete could be
+   said about feasibility.
+2. Can you run this without uninstalling the original Loupedeck software
+   first? (u/Lewd_Toaster). Real open question, told them "i havent tested
+   that yet" in the thread. The known conflict so far is the old Loupedeck
+   app/LaunchAgent grabbing the serial port if it's running (see
+   razerstream-protocol-notes memory); untested whether just quitting it is
+   enough or a full uninstall is required, and whether either leaves any
+   state that fights RazerStream. Worth an explicit test and a README/FAQ
+   note once answered, since it's clearly a common worry for people coming
+   from the dead app.
 
 ## Track 5: Other platforms (community owned)
 
