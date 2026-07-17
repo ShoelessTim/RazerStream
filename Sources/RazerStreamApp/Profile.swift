@@ -273,11 +273,31 @@ final class ProfileStore: ObservableObject {
         currentPageIndex = activeProfile.pages.count - 1
     }
 
-    func deleteCurrentPage() {
+    /// Deletes a page by id regardless of which page is currently selected;
+    /// used by the sidebar, where a context menu can target any row.
+    func deletePage(_ pageID: Page.ID) {
         guard activeProfile.pages.count > 1 else { return }
-        let idx = currentPageIndex
-        updateActive { $0.pages.remove(at: idx) }
-        currentPageIndex = min(idx, activeProfile.pages.count - 1)
+        updateActive { profile in
+            profile.pages.removeAll { $0.id == pageID }
+        }
+        currentPageIndex = min(currentPageIndex, activeProfile.pages.count - 1)
+    }
+
+    func renamePage(_ pageID: Page.ID, to name: String) {
+        updateActive { profile in
+            guard let idx = profile.pages.firstIndex(where: { $0.id == pageID }) else { return }
+            profile.pages[idx].name = name
+        }
+    }
+
+    /// Reorders pages themselves (dragging a page row in the sidebar);
+    /// distinct from reordering tiles within a page.
+    func movePages(fromOffsets: IndexSet, toOffset: Int) {
+        let currentID = currentPage.id
+        updateActive { $0.pages.move(fromOffsets: fromOffsets, toOffset: toOffset) }
+        if let newIdx = activeProfile.pages.firstIndex(where: { $0.id == currentID }) {
+            currentPageIndex = newIdx
+        }
     }
 
     private struct SavedState: Codable {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import RazerStreamKit
 
 enum Selection: Equatable {
@@ -9,23 +10,25 @@ struct ContentView: View {
     @EnvironmentObject var store: ProfileStore
     @EnvironmentObject var deviceManager: DeviceManager
     @State private var selection: Selection?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        VStack(spacing: 0) {
-            HSplitView {
-                VStack(spacing: 14) {
-                    pageBar
-                    deviceMirror
-                    physicalButtonRow
-                    Spacer(minLength: 0)
-                }
-                .padding()
-                .frame(minWidth: 560)
-
-                inspector
-                    .frame(minWidth: 300, maxWidth: 360)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 170, ideal: 210, max: 280)
+        } content: {
+            VStack(spacing: 14) {
+                deviceMirror
+                physicalButtonRow
+                Spacer(minLength: 0)
             }
-
+            .padding()
+            .frame(minWidth: 480)
+        } detail: {
+            inspector
+                .frame(minWidth: 300)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             statusBar
         }
         .frame(minWidth: 900, minHeight: 560)
@@ -99,41 +102,106 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Pages
+    // MARK: - Sidebar (pages)
 
-    private var pageBar: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(store.activeProfile.pages.enumerated()), id: \.element.id) { idx, page in
+    /// The sidebar selects a page directly by id, since a page's index can
+    /// shift out from under it (delete, reorder) between renders.
+    private var selectedPageID: Binding<Page.ID?> {
+        Binding(
+            get: { store.currentPage.id },
+            set: { newID in
+                guard let newID,
+                      let idx = store.activeProfile.pages.firstIndex(where: { $0.id == newID })
+                else { return }
+                store.goToPage(idx)
+                deviceManager.pushCurrentPage()
+            }
+        )
+    }
+
+    private var sidebar: some View {
+        List(selection: selectedPageID) {
+            Section("Pages") {
+                ForEach(store.activeProfile.pages) { page in
+                    PageRow(page: page)
+                        .tag(page.id)
+                        .contextMenu {
+                            if store.activeProfile.pages.count > 1 {
+                                Button("Delete", role: .destructive) {
+                                    store.deletePage(page.id)
+                                    deviceManager.pushCurrentPage()
+                                }
+                            }
+                        }
+                }
+                .onMove { indices, newOffset in
+                    store.movePages(fromOffsets: indices, toOffset: newOffset)
+                    deviceManager.pushCurrentPage()
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            HStack {
                 Button {
-                    store.goToPage(idx)
+                    store.addPage()
                     deviceManager.pushCurrentPage()
                 } label: {
-                    Text(page.name)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(idx == store.currentPageIndex
-                                      ? Color.accentColor.opacity(0.25) : Color.clear)
-                        )
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .help("Add Page")
+                Spacer()
             }
-            Button { store.addPage(); deviceManager.pushCurrentPage() } label: {
-                Image(systemName: "plus")
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+    }
+}
+
+// MARK: - Sidebar page row (double-click to rename, like Finder and Xcode)
+
+private struct PageRow: View {
+    @EnvironmentObject var store: ProfileStore
+    let page: Page
+
+    @State private var isEditing = false
+    @State private var draftName = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: "square.grid.3x2")
+                .foregroundStyle(.secondary)
+            if isEditing {
+                TextField("Page name", text: $draftName)
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .onSubmit { commit() }
+            } else {
+                Text(page.name)
             }
-            if store.activeProfile.pages.count > 1 {
-                Button(role: .destructive) {
-                    store.deleteCurrentPage()
-                    deviceManager.pushCurrentPage()
-                } label: {
-                    Image(systemName: "trash")
-                }
-            }
-            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            draftName = page.name
+            isEditing = true
+            focused = true
+        }
+        .onChange(of: focused) { _, isFocused in
+            if !isFocused && isEditing { commit() }
         }
     }
 
+    private func commit() {
+        let trimmed = draftName.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { store.renamePage(page.id, to: trimmed) }
+        isEditing = false
+    }
+}
+
+extension ContentView {
     // MARK: - Device mirror
 
     private var deviceMirror: some View {
