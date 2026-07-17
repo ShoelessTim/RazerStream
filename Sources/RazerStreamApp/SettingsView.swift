@@ -1,8 +1,31 @@
 import SwiftUI
 import ServiceManagement
 import RazerStreamKit
+import UniformTypeIdentifiers
 
 // Standard macOS Settings window (Cmd+comma). Grouped Form; HIG styling.
+
+// Wraps one Profile's JSON for the standard SwiftUI file exporter; a plain
+// data pass-through rather than encoding/decoding a whole Profile inline
+// here, so the file format stays exactly what ProfileStore already reads
+// and writes for the main profiles.json store.
+struct ProfileDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.razerStreamProfile] }
+    var data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.data = data
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
 
 struct SettingsView: View {
     @EnvironmentObject var store: ProfileStore
@@ -13,6 +36,8 @@ struct SettingsView: View {
     @State private var hapticsEnabled = HapticFeedback.isEnabled
     @State private var hapticPattern = HapticFeedback.pattern
     @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
+    @State private var idleDimmingEnabled = IdleDimming.isEnabled
+    @State private var idleDimmingMinutes = IdleDimming.minutes
 
     var body: some View {
         TabView {
@@ -103,6 +128,24 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Dim after inactivity", isOn: $idleDimmingEnabled)
+                    .onChange(of: idleDimmingEnabled) { _, v in IdleDimming.isEnabled = v }
+                if idleDimmingEnabled {
+                    Picker("Dim after", selection: $idleDimmingMinutes) {
+                        Text("1 minute").tag(1)
+                        Text("5 minutes").tag(5)
+                        Text("10 minutes").tag(10)
+                        Text("30 minutes").tag(30)
+                    }
+                    .onChange(of: idleDimmingMinutes) { _, v in IdleDimming.minutes = v }
+                }
+            } footer: {
+                Text("Dims the panel after no button, knob, or touch input; any input wakes it back up to its normal brightness.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button {
                     deviceManager.testDevice()
                 } label: {
@@ -115,6 +158,8 @@ struct SettingsView: View {
         .onAppear {
             brightness = Double(store.activeProfile.brightness)
             clockwiseIncreases = KnobDirection.clockwiseIncreases
+            idleDimmingEnabled = IdleDimming.isEnabled
+            idleDimmingMinutes = IdleDimming.minutes
         }
     }
 
@@ -250,6 +295,10 @@ struct SettingsView: View {
     // MARK: History
 
     @State private var versionToRestore: ProfileStore.ProfileVersion?
+    @State private var exportDocument: ProfileDocument?
+    @State private var showExporter = false
+    @State private var showImporter = false
+    @State private var importFailed = false
 
     private var history: some View {
         Form {
@@ -261,6 +310,25 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("Makes a named copy you can keep as a checkpoint; edits to the original will not affect it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button {
+                    guard let data = store.exportData(for: store.activeProfile.id) else { return }
+                    exportDocument = ProfileDocument(data: data)
+                    showExporter = true
+                } label: {
+                    Label("Export Current Profile…", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    showImporter = true
+                } label: {
+                    Label("Import Profile…", systemImage: "square.and.arrow.down")
+                }
+            } footer: {
+                Text("Saves or loads a single profile as a standalone .razerstream file, to share a layout or back one up outside the app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -301,6 +369,31 @@ struct SettingsView: View {
             }
         } message: { version in
             Text("Replaces all profiles and pages with the version saved at \(version.date.formatted(date: .abbreviated, time: .standard)). The current state is saved first, so you can restore back to it afterward.")
+        }
+        .fileExporter(
+            isPresented: $showExporter,
+            document: exportDocument,
+            contentType: .razerStreamProfile,
+            defaultFilename: store.activeProfile.name
+        ) { _ in }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.razerStreamProfile]) { result in
+            switch result {
+            case .success(let url):
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                if let data = try? Data(contentsOf: url) {
+                    importFailed = !store.importProfile(from: data)
+                } else {
+                    importFailed = true
+                }
+            case .failure:
+                importFailed = true
+            }
+        }
+        .alert("Couldn't Import Profile", isPresented: $importFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("That file doesn't look like a valid RazerStream profile.")
         }
     }
 

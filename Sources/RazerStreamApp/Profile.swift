@@ -626,6 +626,33 @@ final class ProfileStore: ObservableObject {
         save()
     }
 
+    // MARK: - Native profile export/import (.razerstream files)
+
+    /// Encodes a single profile as a standalone file, separate from the
+    /// whole profiles.json store, so it can be shared with someone else or
+    /// kept as a backup outside the app's own version history.
+    func exportData(for profileID: UUID) -> Data? {
+        guard let profile = profiles.first(where: { $0.id == profileID }) else { return nil }
+        return try? JSONEncoder().encode(profile)
+    }
+
+    /// Imports a profile written by exportData(for:). Always gets a fresh
+    /// id, so it can never collide with or overwrite an existing profile,
+    /// and becomes the active profile so the import is immediately visible.
+    @discardableResult
+    func importProfile(from data: Data) -> Bool {
+        guard var profile = try? JSONDecoder().decode(Profile.self, from: data) else { return false }
+        profile.id = UUID()
+        if profiles.contains(where: { $0.name == profile.name }) {
+            profile.name += " (imported)"
+        }
+        profiles.append(profile)
+        activeProfileID = profile.id
+        currentPageIndex = 0
+        save()
+        return true
+    }
+
     // MARK: - App-switching pages
 
     func setAppSwitchingEnabled(_ enabled: Bool) {

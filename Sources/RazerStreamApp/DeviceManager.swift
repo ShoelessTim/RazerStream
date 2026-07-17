@@ -17,6 +17,7 @@ final class DeviceManager: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
+    private var idleCheckTask: Task<Void, Never>?
     private let appSwitchMonitor = AppSwitchMonitor()
     weak var store: ProfileStore?
 
@@ -25,6 +26,27 @@ final class DeviceManager: ObservableObject {
     private var activeTouches: [Int: Int] = [:]          // touchID → tile index
     private var shiftReturnPage: Int?
 
+    // Two-finger swipe: remembers where each touch started (x position and
+    // the page that was current then) until it lifts, so touchEnd can tell
+    // a swipe from a tap by how far that touch travelled.
+    private var touchOrigin: [Int: (x: Int, page: Int)] = [:]
+    private static let swipeThreshold = 150   // out of 480 total screen width
+
+    // Knob acceleration: two rotate events on the same knob closer together
+    // than this count as a fast turn and step the assigned action further.
+    private var lastKnobRotate: [Int: Date] = [:]
+    private static let fastTurnInterval: TimeInterval = 0.12
+
+    // Idle dimming
+    private var lastInputAt = Date()
+    private var isDimmed = false
+
+    // Fires a haptic tick only when the page actually changed since the
+    // last push, not on every redraw (toggle flips, brightness steps,
+    // Redraw button); compared by id since index alone can be recycled
+    // by page deletes/reorders.
+    private var lastPushedPageID: Page.ID?
+
     func toggleKey(tile: Int) -> String { "p\(store?.currentPageIndex ?? 0)-t\(tile)" }
     func toggleKey(button: Int) -> String { "p\(store?.currentPageIndex ?? 0)-b\(button)" }
 
@@ -32,6 +54,7 @@ final class DeviceManager: ObservableObject {
         self.store = store
         connectLoop()
         startLiveTileClock()
+        startIdleCheck()
         appSwitchMonitor.start(store: store, deviceManager: self)
     }
 
@@ -40,10 +63,41 @@ final class DeviceManager: ObservableObject {
         reconnectTask?.cancel()
         pushTask?.cancel()
         liveTileTask?.cancel()
+        idleCheckTask?.cancel()
         appSwitchMonitor.stop()
         device?.close()
         device = nil
         connected = false
+    }
+
+    // MARK: - Idle dimming
+
+    private func startIdleCheck() {
+        idleCheckTask?.cancel()
+        idleCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                if Task.isCancelled { return }
+                self?.checkIdle()
+            }
+        }
+    }
+
+    private func checkIdle() {
+        guard IdleDimming.isEnabled, connected, !isDimmed, let device else { return }
+        let timeout = TimeInterval(IdleDimming.minutes * 60)
+        guard timeout > 0, Date().timeIntervalSince(lastInputAt) >= timeout else { return }
+        isDimmed = true
+        try? device.send(.setBrightness(1))
+    }
+
+    /// Marks real device input (button, knob, touch); wakes the panel back
+    /// to its configured brightness first, if it had dimmed for being idle.
+    private func noteInput() {
+        lastInputAt = Date()
+        guard isDimmed, let device, let store else { return }
+        isDimmed = false
+        try? device.send(.setBrightness(store.activeProfile.brightness))
     }
 
     // MARK: - Live tiles (self-updating content, e.g. the clock)
@@ -131,7 +185,9 @@ final class DeviceManager: ObservableObject {
             // Runtime state is per-session; clear so a reconnect starts fresh
             toggleStates.removeAll()
             activeTouches.removeAll()
+            touchOrigin.removeAll()
             shiftReturnPage = nil
+            isDimmed = false
 
         case .firmwareVersion(let v): firmware = v
         case .serialNumber(let s):    serial = s
@@ -140,6 +196,7 @@ final class DeviceManager: ObservableObject {
             // Device enumerates knob presses first: IDs 1–3 left knobs
             // top→bottom, 4–6 right knobs top→bottom, then 7–14 are the
             // eight physical buttons left→right. (Verified on hardware.)
+            noteInput()
             if pressed { HapticFeedback.trigger(on: device) }
             if id >= 1 && id <= 6 {
                 if pressed { run(page.knobs[id - 1].press) }
@@ -148,11 +205,20 @@ final class DeviceManager: ObservableObject {
             }
 
         case .knobRotate(let id, let delta):
+            noteInput()
             guard id >= 1 && id <= 6 else { return }
             let knob = page.knobs[id - 1]
-            run(delta > 0 ? knob.clockwise : knob.counterClockwise)
+            let now = Date()
+            let sinceLast = lastKnobRotate[id].map { now.timeIntervalSince($0) } ?? .infinity
+            lastKnobRotate[id] = now
+            let amount = sinceLast < Self.fastTurnInterval ? 3 : 1
+            run(delta > 0 ? knob.clockwise : knob.counterClockwise, amount: amount)
 
         case .touchStart(let x, let y, let touchID):
+            noteInput()
+            if touchOrigin[touchID] == nil {
+                touchOrigin[touchID] = (x, store.currentPageIndex)
+            }
             // Only fire on the first event of this touch (device streams
             // touchStart repeatedly while a finger moves)
             guard activeTouches[touchID] == nil else { return }
@@ -165,9 +231,20 @@ final class DeviceManager: ObservableObject {
             HapticFeedback.trigger(on: device)
             handleTilePress(index: idx, page: page)
 
-        case .touchEnd(_, _, let touchID):
+        case .touchEnd(let x, _, let touchID):
+            noteInput()
             if let idx = activeTouches.removeValue(forKey: touchID) {
                 handleTileRelease(index: idx, page: page)
+            }
+            // Two-finger swipe: if another touch was still down when this one
+            // started, and this one travelled far enough horizontally, treat
+            // it as a page swipe rather than just a lifted tap.
+            if let origin = touchOrigin.removeValue(forKey: touchID), !touchOrigin.isEmpty {
+                let dx = x - origin.x
+                if abs(dx) >= Self.swipeThreshold {
+                    store.goToPage(origin.page + (dx < 0 ? 1 : -1))
+                    pushCurrentPage()
+                }
             }
 
         default:
@@ -255,8 +332,8 @@ final class DeviceManager: ObservableObject {
         ))
     }
 
-    private func run(_ action: ControlAction) {
-        ActionEngine.perform(action) { [weak self] nav in
+    private func run(_ action: ControlAction, amount: Int = 1) {
+        ActionEngine.perform(action, amount: amount) { [weak self] nav in
             guard let self, let store = self.store else { return }
             switch nav {
             case .goto(let p): store.goToPage(p)
@@ -264,9 +341,9 @@ final class DeviceManager: ObservableObject {
             case .prev:        store.goToPage(store.currentPageIndex - 1)
             }
             self.pushCurrentPage()
-        } deviceHandler: { [weak self] adjustment in
+        } deviceHandler: { [weak self] adjustment, amount in
             guard let self, let store = self.store else { return }
-            let step = 1
+            let step = amount
             let current = Int(store.activeProfile.brightness)
             let next: Int
             switch adjustment {
@@ -288,16 +365,25 @@ final class DeviceManager: ObservableObject {
         let profile = store.activeProfile
         let page = store.resolvedCurrentPage
 
+        // A haptic tick confirms an actual page change (shift-hold, page
+        // nav action, sidebar click, auto app-switch) without buzzing on
+        // every redraw (toggle flips, brightness steps, Redraw button); the
+        // initial connect draw is excluded too, since it has its own
+        // cascade/fade-in welcome already.
+        let isPageChange = !choreography && page.id != lastPushedPageID
+        lastPushedPageID = page.id
+
         // Pace writes; blasting framebuffers back to back overruns the
         // device's serial buffer and nothing renders
         pushTask?.cancel()
         pushTask = Task {
             if choreography {
                 await self.runLEDCascade(device: device, page: page)
+                await self.fadeInBrightness(device: device, to: profile.brightness)
+            } else {
+                try? device.send(.setBrightness(profile.brightness))
+                try? await Task.sleep(for: .milliseconds(60))
             }
-
-            try? device.send(.setBrightness(profile.brightness))
-            try? await Task.sleep(for: .milliseconds(60))
 
             for (i, tile) in page.tiles.enumerated() {
                 if Task.isCancelled { return }
@@ -326,6 +412,24 @@ final class DeviceManager: ObservableObject {
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
+
+            if isPageChange { HapticFeedback.trigger(on: device) }
+        }
+    }
+
+    /// Ramps brightness up from 0 instead of jumping straight to the target;
+    /// only used on connect, so the panel wakes in gradually rather than
+    /// snapping to full brightness the instant the handshake completes.
+    private func fadeInBrightness(device: RazerStreamDevice, to target: UInt8) async {
+        guard target > 0 else {
+            try? device.send(.setBrightness(0))
+            return
+        }
+        let steps = min(Int(target), 5)
+        for step in 1...steps {
+            if Task.isCancelled { return }
+            try? device.send(.setBrightness(UInt8(Int(target) * step / steps)))
+            try? await Task.sleep(for: .milliseconds(80))
         }
     }
 

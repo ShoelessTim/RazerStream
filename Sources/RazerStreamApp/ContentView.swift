@@ -22,6 +22,7 @@ struct TileDragPayload: Codable, Transferable {
 
 extension UTType {
     static let razerStreamTile = UTType(exportedAs: "org.community.razerstream.tile")
+    static let razerStreamProfile = UTType(exportedAs: "org.community.razerstream.profile", conformingTo: .json)
 }
 
 struct ContentView: View {

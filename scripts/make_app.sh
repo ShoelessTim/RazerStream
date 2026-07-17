@@ -46,12 +46,30 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <key>CFBundleName</key>                <string>RazerStream</string>
     <key>CFBundleDisplayName</key>         <string>RazerStream</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
-    <key>CFBundleShortVersionString</key>  <string>1.4.0</string>
-    <key>CFBundleVersion</key>             <string>7</string>
+    <key>CFBundleShortVersionString</key>  <string>1.4.1</string>
+    <key>CFBundleVersion</key>             <string>8</string>
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
     <key>CFBundleIconFile</key>            <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>     <true/>
     <key>NSHumanReadableCopyright</key>    <string>Community project — MIT</string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>  <string>org.community.razerstream.profile</string>
+            <key>UTTypeDescription</key> <string>RazerStream Profile</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>razerstream</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

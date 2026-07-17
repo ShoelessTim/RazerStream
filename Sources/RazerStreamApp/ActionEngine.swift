@@ -16,8 +16,9 @@ enum ActionEngine {
 
     static func perform(
         _ action: ControlAction,
+        amount: Int = 1,
         pageHandler: (PageNav) -> Void = { _ in },
-        deviceHandler: (DeviceAdjustment) -> Void = { _ in }
+        deviceHandler: (DeviceAdjustment, Int) -> Void = { _, _ in }
     ) {
         switch action {
         case .none:
@@ -59,11 +60,11 @@ enum ActionEngine {
         // Hardware key events show the native on-screen volume HUD; they need
         // the Accessibility grant, so fall back to silent AppleScript without it
         case .volumeUp:
-            if hasAccessibility { sendMediaKey(0) }   // NX_KEYTYPE_SOUND_UP
-            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) + 6)") }
+            if hasAccessibility { for _ in 0..<amount { sendMediaKey(0) } }   // NX_KEYTYPE_SOUND_UP
+            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) + \(6 * amount))") }
         case .volumeDown:
-            if hasAccessibility { sendMediaKey(1) }   // NX_KEYTYPE_SOUND_DOWN
-            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) - 6)") }
+            if hasAccessibility { for _ in 0..<amount { sendMediaKey(1) } }   // NX_KEYTYPE_SOUND_DOWN
+            else { runAppleScript("set volume output volume ((output volume of (get volume settings)) - \(6 * amount))") }
         case .volumeMute:
             if hasAccessibility { sendMediaKey(7) }   // NX_KEYTYPE_MUTE
             else { runAppleScript("set volume output muted (not (output muted of (get volume settings)))") }
@@ -72,8 +73,8 @@ enum ActionEngine {
         case .nextPage:        pageHandler(.next)
         case .prevPage:        pageHandler(.prev)
 
-        case .brightnessUp:   deviceHandler(.brightnessUp)
-        case .brightnessDown: deviceHandler(.brightnessDown)
+        case .brightnessUp:   deviceHandler(.brightnessUp, amount)
+        case .brightnessDown: deviceHandler(.brightnessDown, amount)
 
         case .showApp:
             // Reopens the window if it was closed, or fronts it if open;
