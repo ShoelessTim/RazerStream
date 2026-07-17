@@ -38,7 +38,11 @@ struct ContentView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 170, ideal: 210, max: 280)
         } content: {
-            VStack(spacing: 14) {
+            // The mirror represents fixed physical hardware, so it stays a
+            // constant size and is centered with generous margins rather
+            // than stretching to fill a larger window; extra space reads as
+            // intentional whitespace instead of the mirror looking lost.
+            VStack(spacing: 20) {
                 if !deviceManager.connected {
                     Label("No device connected; edits still apply once one is plugged in.",
                           systemImage: "cable.connector.slash")
@@ -48,12 +52,18 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                         .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 }
-                deviceMirror
-                physicalButtonRow
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 20) {
+                    deviceMirror
+                    physicalButtonRow
+                }
+
                 Spacer(minLength: 0)
             }
-            .padding()
-            .frame(minWidth: 480)
+            .padding(28)
+            .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)
             .animation(.easeInOut, value: deviceManager.connected)
         } detail: {
             inspector
@@ -255,12 +265,17 @@ extension ContentView {
 
     private var deviceMirror: some View {
         let page = store.currentPage
-        return HStack(spacing: 10) {
+        return HStack(spacing: Self.knobGutter) {
             knobColumn(indices: [0, 1, 2], page: page)
             tileGrid(page: page)
             knobColumn(indices: [3, 4, 5], page: page)
         }
     }
+
+    // Shared so physicalButtonRow's leading offset stays mathematically
+    // aligned with the knob column instead of a disconnected magic number.
+    private static let knobColumnWidth: CGFloat = 54
+    private static let knobGutter: CGFloat = 24
 
     private func tileGrid(page: Page) -> some View {
         let cols = RazerStreamController.buttonColumns
@@ -434,7 +449,7 @@ extension ContentView {
             }
             Spacer()
         }
-        .padding(.leading, 70)
+        .padding(.leading, Self.knobColumnWidth + Self.knobGutter)
     }
 
     // MARK: - Inspector
@@ -706,23 +721,28 @@ struct TileInspector: View {
                         .foregroundStyle(.secondary)
                 } else {
                     TextField("Label", text: $label)
-                    HStack {
-                        if !sfSymbol.isEmpty {
-                            Image(systemName: sfSymbol)
-                            Text(sfSymbol).font(.caption)
-                        } else if !imagePath.isEmpty {
-                            if let img = IconThumbnails.image(forPath: imagePath) {
-                                Image(nsImage: img)
-                                    .renderingMode(iconTint ? .template : .original)
+                    LabeledContent("Icon") {
+                        HStack(spacing: 6) {
+                            if !sfSymbol.isEmpty {
+                                Image(systemName: sfSymbol)
+                                Text(sfSymbol)
+                            } else if !imagePath.isEmpty {
+                                if let img = IconThumbnails.image(forPath: imagePath) {
+                                    Image(nsImage: img)
+                                        .renderingMode(iconTint ? .template : .original)
+                                }
+                                Text((imagePath as NSString).lastPathComponent)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            } else {
+                                Text("None").foregroundStyle(.secondary)
                             }
-                            Text((imagePath as NSString).lastPathComponent)
-                                .font(.caption).lineLimit(1)
-                        } else {
-                            Text("No icon").foregroundStyle(.secondary).font(.caption)
                         }
-                        Spacer()
-                        Button("Icon Library…") { showSymbolPicker = true }
+                        .font(.caption)
                     }
+                    Button("Icon Library…") { showSymbolPicker = true }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+
                     HStack {
                         TextField("Custom image (optional)", text: $imagePath)
                         Button("Choose…") {
@@ -743,6 +763,7 @@ struct TileInspector: View {
             Button("Apply") { apply() }
                 .keyboardShortcut(.return)
         }
+        .formStyle(.grouped)
         .sheet(isPresented: $showSymbolPicker) {
             IconPicker(symbol: $sfSymbol, imagePath: $imagePath, tintIcon: $iconTint)
         }
@@ -802,16 +823,19 @@ struct KnobInspector: View {
         Form {
             Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
                 TextField("Label", text: $label)
-                HStack {
+                LabeledContent("Icon") {
                     if !sfSymbol.isEmpty {
-                        Image(systemName: sfSymbol)
-                        Text(sfSymbol).font(.caption)
+                        HStack(spacing: 6) {
+                            Image(systemName: sfSymbol)
+                            Text(sfSymbol)
+                        }
+                        .font(.caption)
                     } else {
-                        Text("No icon").foregroundStyle(.secondary).font(.caption)
+                        Text("None").foregroundStyle(.secondary).font(.caption)
                     }
-                    Spacer()
-                    Button("Icon Library…") { showSymbolPicker = true }
                 }
+                Button("Icon Library…") { showSymbolPicker = true }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             Section("Actions") {
                 ActionEditor(title: "Turn right (clockwise)", action: $clockwise)
@@ -821,6 +845,7 @@ struct KnobInspector: View {
             Button("Apply") { apply() }
                 .keyboardShortcut(.return)
         }
+        .formStyle(.grouped)
         .sheet(isPresented: $showSymbolPicker) {
             SymbolPicker(symbol: $sfSymbol)
         }
@@ -883,6 +908,7 @@ struct ButtonInspector: View {
             Button("Apply") { apply() }
                 .keyboardShortcut(.return)
         }
+        .formStyle(.grouped)
         .onAppear(perform: loadCurrent)
         .onChange(of: buttonIndex) { loadCurrent() }
         .onChange(of: store.currentPageIndex) { loadCurrent() }
