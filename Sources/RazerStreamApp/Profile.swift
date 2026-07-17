@@ -122,9 +122,39 @@ struct TileConfig: Codable, Equatable {
 struct KnobConfig: Codable, Equatable {
     var label: String = ""
     var sfSymbol: String? = nil
+    var imagePath: String? = nil      // custom image file (overrides symbol)
+    var iconTint: Bool = false        // tint the image white; for mono pack SVGs
+    var liveContent: LiveContent = .none   // self-updating content; overrides label/icon
     var clockwise: ControlAction = .none
     var counterClockwise: ControlAction = .none
     var press: ControlAction = .none
+
+    init(label: String = "", sfSymbol: String? = nil, imagePath: String? = nil,
+         iconTint: Bool = false, liveContent: LiveContent = .none,
+         clockwise: ControlAction = .none, counterClockwise: ControlAction = .none,
+         press: ControlAction = .none) {
+        self.label = label
+        self.sfSymbol = sfSymbol
+        self.imagePath = imagePath
+        self.iconTint = iconTint
+        self.liveContent = liveContent
+        self.clockwise = clockwise
+        self.counterClockwise = counterClockwise
+        self.press = press
+    }
+
+    // Tolerant decoding so profiles saved by older builds keep loading
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        sfSymbol = try c.decodeIfPresent(String.self, forKey: .sfSymbol)
+        imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
+        iconTint = try c.decodeIfPresent(Bool.self, forKey: .iconTint) ?? false
+        liveContent = try c.decodeIfPresent(LiveContent.self, forKey: .liveContent) ?? .none
+        clockwise = try c.decodeIfPresent(ControlAction.self, forKey: .clockwise) ?? .none
+        counterClockwise = try c.decodeIfPresent(ControlAction.self, forKey: .counterClockwise) ?? .none
+        press = try c.decodeIfPresent(ControlAction.self, forKey: .press) ?? .none
+    }
 }
 
 struct ButtonConfig: Codable, Equatable {

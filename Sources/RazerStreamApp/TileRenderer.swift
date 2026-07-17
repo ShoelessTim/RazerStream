@@ -153,12 +153,30 @@ enum TileRenderer {
         ctx.setFillColor(CGColor(red: 0.08, green: 0.08, blue: 0.1, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
 
+        if knob.liveContent == .clock {
+            drawCompactClockFace(in: ctx, width: w, height: h)
+            return rgb565(from: ctx, width: w, height: h)
+        }
+
         // Center the icon and label as one vertical group; icon alone sits
         // dead center, label alone sits dead center, both stack around center
         let hasLabel = !knob.label.isEmpty
         let labelBlock: CGFloat = hasLabel ? 18 : 0   // text height plus gap
 
-        if let symbol = knob.sfSymbol, let cgImage = symbolImage(symbol, pointSize: 26) {
+        // Custom image (from an icon pack or user file) beats an SF Symbol,
+        // same precedence as tiles. Tinted images render white.
+        var iconImage: CGImage?
+        if let path = knob.imagePath, let nsImage = NSImage(contentsOfFile: path) {
+            if knob.iconTint {
+                iconImage = tintedWhite(nsImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            } else {
+                iconImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            }
+        } else if let symbol = knob.sfSymbol {
+            iconImage = symbolImage(symbol, pointSize: 26)
+        }
+
+        if let cgImage = iconImage {
             let iw = CGFloat(cgImage.width), ih = CGFloat(cgImage.height)
             let scale = min(36 / iw, 36 / ih, 1)
             let dw = iw * scale, dh = ih * scale
@@ -179,6 +197,15 @@ enum TileRenderer {
         }
 
         return rgb565(from: ctx, width: w, height: h)
+    }
+
+    /// A smaller clock face sized for the 60-wide knob strip; time only,
+    /// the full date does not fit legibly at this width.
+    private static func drawCompactClockFace(in ctx: CGContext, width: Int, height: Int) {
+        drawText(clockTimeFormatter.string(from: Date()), in: ctx, canvas: width, height: height,
+                 fontSize: 13, yOffset: CGFloat(height) * 0.44)
+        drawText(clockDateFormatter.string(from: Date()), in: ctx, canvas: width, height: height,
+                 fontSize: 9, yOffset: CGFloat(height) * 0.30)
     }
 
     // MARK: - Shared drawing helpers

@@ -391,21 +391,46 @@ extension ContentView {
         }
     }
 
+    /// Smaller clock for the 54pt-wide knob box; time only, matching
+    /// TileRenderer's compact knob-strip clock on the device.
+    private func compactClockFace() -> some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            VStack(spacing: 2) {
+                Text(context.date, format: .dateTime.hour().minute())
+                    .font(.system(size: 12, weight: .semibold))
+                Text(context.date, format: .dateTime.weekday(.abbreviated).day())
+                    .font(.system(size: 8))
+            }
+            .foregroundStyle(.white)
+        }
+    }
+
     private func knobColumn(indices: [Int], page: Page) -> some View {
         VStack(spacing: 8) {
             ForEach(indices, id: \.self) { i in
                 let knob = page.knobs[i]
                 Button { selection = .knob(i) } label: {
-                    VStack(spacing: 4) {
-                        if let symbol = knob.sfSymbol {
-                            Image(systemName: symbol).font(.system(size: 16))
+                    Group {
+                        if knob.liveContent == .clock {
+                            compactClockFace()
                         } else {
-                            Image(systemName: "dial.medium").font(.system(size: 16))
-                                .foregroundStyle(.secondary)
+                            VStack(spacing: 4) {
+                                if let path = knob.imagePath, let img = NSImage(contentsOfFile: path) {
+                                    Image(nsImage: img)
+                                        .renderingMode(knob.iconTint ? .template : .original)
+                                        .resizable().scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                } else if let symbol = knob.sfSymbol {
+                                    Image(systemName: symbol).font(.system(size: 16))
+                                } else {
+                                    Image(systemName: "dial.medium").font(.system(size: 16))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
+                                    .font(.system(size: 9))
+                                    .lineLimit(1)
+                            }
                         }
-                        Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
-                            .font(.system(size: 9))
-                            .lineLimit(1)
                     }
                     .foregroundStyle(.white)
                     .frame(width: 54, height: 84)
@@ -851,6 +876,9 @@ struct KnobInspector: View {
 
     @State private var label = ""
     @State private var sfSymbol = ""
+    @State private var imagePath = ""
+    @State private var iconTint = false
+    @State private var liveContent: LiveContent = .none
     @State private var clockwise: ControlAction = .none
     @State private var counterClockwise: ControlAction = .none
     @State private var press: ControlAction = .none
@@ -859,22 +887,42 @@ struct KnobInspector: View {
     var body: some View {
         Form {
             Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
-                TextField("Label", text: $label)
-                LabeledContent("Icon") {
-                    HStack(spacing: 8) {
-                        Group {
-                            if !sfSymbol.isEmpty {
-                                HStack(spacing: 4) {
-                                    Image(systemName: sfSymbol)
-                                    Text(sfSymbol)
-                                }
-                            } else {
-                                Text("None").foregroundStyle(.secondary)
-                            }
-                        }
+                Picker("Content", selection: $liveContent) {
+                    Text("Static").tag(LiveContent.none)
+                    Text("Clock").tag(LiveContent.clock)
+                }
+                if liveContent == .clock {
+                    Text("Shows the current time; updates on its own once a minute.")
                         .font(.caption)
-                        Spacer(minLength: 8)
-                        Button("Icon Library…") { showSymbolPicker = true }
+                        .foregroundStyle(.secondary)
+                } else {
+                    TextField("Label", text: $label)
+                    LabeledContent("Icon") {
+                        HStack(spacing: 8) {
+                            Group {
+                                if !sfSymbol.isEmpty {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: sfSymbol)
+                                        Text(sfSymbol)
+                                    }
+                                } else if !imagePath.isEmpty {
+                                    HStack(spacing: 4) {
+                                        if let img = IconThumbnails.image(forPath: imagePath) {
+                                            Image(nsImage: img)
+                                                .renderingMode(iconTint ? .template : .original)
+                                        }
+                                        Text((imagePath as NSString).lastPathComponent)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                } else {
+                                    Text("None").foregroundStyle(.secondary)
+                                }
+                            }
+                            .font(.caption)
+                            Spacer(minLength: 8)
+                            Button("Icon Library…") { showSymbolPicker = true }
+                        }
                     }
                 }
             }
@@ -888,7 +936,7 @@ struct KnobInspector: View {
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showSymbolPicker) {
-            SymbolPicker(symbol: $sfSymbol)
+            IconPicker(symbol: $sfSymbol, imagePath: $imagePath, tintIcon: $iconTint)
         }
         .onAppear(perform: loadCurrent)
         .onChange(of: knobIndex) { loadCurrent() }
@@ -899,6 +947,9 @@ struct KnobInspector: View {
         let knob = store.currentPage.knobs[knobIndex]
         label = knob.label
         sfSymbol = knob.sfSymbol ?? ""
+        imagePath = knob.imagePath ?? ""
+        iconTint = knob.iconTint
+        liveContent = knob.liveContent
         clockwise = knob.clockwise
         counterClockwise = knob.counterClockwise
         press = knob.press
@@ -909,6 +960,9 @@ struct KnobInspector: View {
             page.knobs[knobIndex] = KnobConfig(
                 label: label,
                 sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
+                imagePath: imagePath.isEmpty ? nil : imagePath,
+                iconTint: iconTint,
+                liveContent: liveContent,
                 clockwise: clockwise,
                 counterClockwise: counterClockwise,
                 press: press
