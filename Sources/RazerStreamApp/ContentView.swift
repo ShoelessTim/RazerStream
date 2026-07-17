@@ -263,6 +263,18 @@ private struct PageRow: View {
             }
         }
         .contentShape(Rectangle())
+        // Explicit rather than relying solely on List's native row-tap
+        // selection: a .dropDestination on this same row can intercept the
+        // click before it reaches List's selection handling on macOS, so
+        // page switching stops working the moment drag-and-drop is added
+        // to a row. Driving navigation directly here is not dependent on
+        // that path at all.
+        .onTapGesture(count: 1) {
+            if let idx = store.activeProfile.pages.firstIndex(where: { $0.id == page.id }) {
+                store.goToPage(idx)
+                deviceManager.pushCurrentPage()
+            }
+        }
         .onTapGesture(count: 2) {
             draftName = page.name
             isEditing = true
@@ -339,8 +351,12 @@ extension ContentView {
     }
 
     private func tileView(_ tile: TileConfig, index: Int) -> some View {
-        Button { selection = .tile(index) } label: {
-            ZStack {
+        // Deliberately not a Button: on macOS, Button's own press-gesture
+        // recognizer competes with (and usually wins over) SwiftUI's drag
+        // gesture, so .draggable attached to a Button often never engages.
+        // A plain view with onTapGesture for selection plus draggable for
+        // the drag is the pattern that actually works for both at once.
+        ZStack {
                 RoundedRectangle(cornerRadius: 10)
                     // Quantized to the tile panel's real 16-bit RGB565 depth,
                     // so this preview matches what the device actually shows
@@ -383,8 +399,8 @@ extension ContentView {
             // Dock-style magnify on hover; a familiar Apple hover affordance
             // for a grid of tappable tiles
             .scaleEffect(hoveredSelection == .tile(index) && selection != .tile(index) ? 1.05 : 1.0)
-        }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onTapGesture { selection = .tile(index) }
         .onHover { isHovering in
             hoveredSelection = isHovering ? .tile(index)
                 : (hoveredSelection == .tile(index) ? nil : hoveredSelection)
