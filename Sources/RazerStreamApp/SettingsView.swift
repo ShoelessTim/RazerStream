@@ -14,6 +14,7 @@ struct SettingsView: View {
         TabView {
             general.tabItem { Label("General", systemImage: "gearshape") }
             device.tabItem { Label("Device", systemImage: "rectangle.grid.3x2") }
+            apps.tabItem { Label("Apps", systemImage: "square.stack.3d.up") }
             icons.tabItem { Label("Icons", systemImage: "photo.on.rectangle.angled") }
             history.tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
             about.tabItem { Label("About", systemImage: "info.circle") }
@@ -141,6 +142,53 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
+    // MARK: Apps
+
+    private var apps: some View {
+        Form {
+            Toggle("Switch pages automatically based on the frontmost app",
+                   isOn: Binding(
+                    get: { store.activeProfile.appSwitchingEnabled },
+                    set: { store.setAppSwitchingEnabled($0) }
+                   ))
+
+            Section {
+                let mappings = Array(store.activeProfile.appPageMappings).sorted { $0.key < $1.key }
+                if mappings.isEmpty {
+                    Text("No apps mapped yet")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(mappings, id: \.key) { bundleID, pageIDString in
+                        AppMappingRow(bundleID: bundleID, pageIDString: pageIDString)
+                    }
+                }
+            } header: {
+                Text("Mapped Apps")
+            } footer: {
+                Text("A manual page change always wins; RazerStream only switches when a different app becomes frontmost, so it never fights you while you are working.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.allowedContentTypes = [.application]
+                    panel.directoryURL = URL(fileURLWithPath: "/Applications")
+                    if panel.runModal() == .OK, let url = panel.url,
+                       let bundleID = Bundle(url: url)?.bundleIdentifier {
+                        // New mappings default to the page you are looking at
+                        // right now; the row's own picker changes it after.
+                        store.setAppMapping(bundleID: bundleID, pageID: store.currentPage.id)
+                    }
+                } label: {
+                    Label("Add App…", systemImage: "plus.app")
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     // MARK: History
 
     @State private var versionToRestore: ProfileStore.ProfileVersion?
@@ -216,6 +264,63 @@ struct SettingsView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - App mapping row
+
+private struct AppMappingRow: View {
+    @EnvironmentObject var store: ProfileStore
+    let bundleID: String
+    let pageIDString: String
+
+    private var appURL: URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+    }
+
+    private var appName: String {
+        guard let url = appURL else { return bundleID }
+        return (url.lastPathComponent as NSString).deletingPathExtension
+    }
+
+    private var appIcon: NSImage {
+        guard let url = appURL else { return NSWorkspace.shared.icon(for: .application) }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: appIcon)
+                .resizable()
+                .frame(width: 20, height: 20)
+            Text(appName)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Picker("", selection: Binding(
+                get: { pageIDString },
+                set: { newID in
+                    if let uuid = UUID(uuidString: newID) {
+                        store.setAppMapping(bundleID: bundleID, pageID: uuid)
+                    }
+                }
+            )) {
+                ForEach(store.activeProfile.pages) { page in
+                    Text(page.name).tag(page.id.uuidString)
+                }
+            }
+            .labelsHidden()
+            .frame(maxWidth: 140)
+
+            Button {
+                store.removeAppMapping(bundleID: bundleID)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.plain)
+            .help("Remove")
+        }
     }
 }
 

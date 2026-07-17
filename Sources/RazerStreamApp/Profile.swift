@@ -197,6 +197,38 @@ struct Profile: Codable, Equatable, Identifiable {
     var name: String = "Default"
     var pages: [Page] = [Page(name: "Page 1")]
     var brightness: UInt8 = 8
+
+    // App-switching: which page to show automatically when a given app
+    // becomes frontmost. Keyed by bundle identifier rather than app name,
+    // since names can collide or change; UUID stored as a string because
+    // dictionary keys must be Codable-friendly and JSON object keys are
+    // always strings anyway.
+    var appSwitchingEnabled: Bool = false
+    var appPageMappings: [String: String] = [:]   // bundle ID -> Page.id.uuidString
+
+    init(id: UUID = UUID(), name: String = "Default", pages: [Page] = [Page(name: "Page 1")],
+         brightness: UInt8 = 8, appSwitchingEnabled: Bool = false,
+         appPageMappings: [String: String] = [:]) {
+        self.id = id
+        self.name = name
+        self.pages = pages
+        self.brightness = brightness
+        self.appSwitchingEnabled = appSwitchingEnabled
+        self.appPageMappings = appPageMappings
+    }
+
+    // Tolerant decoding so profiles saved before this feature keep loading;
+    // plain auto-synthesized Codable would fail on any field added after
+    // the fact, since it decodes non-optional keys rather than defaulting.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Default"
+        pages = try c.decodeIfPresent([Page].self, forKey: .pages) ?? [Page(name: "Page 1")]
+        brightness = try c.decodeIfPresent(UInt8.self, forKey: .brightness) ?? 8
+        appSwitchingEnabled = try c.decodeIfPresent(Bool.self, forKey: .appSwitchingEnabled) ?? false
+        appPageMappings = try c.decodeIfPresent([String: String].self, forKey: .appPageMappings) ?? [:]
+    }
 }
 
 // MARK: - Persistence
@@ -485,6 +517,32 @@ final class ProfileStore: ObservableObject {
         copy.name = "\(original.name) copy"
         profiles.append(copy)
         save()
+    }
+
+    // MARK: - App-switching pages
+
+    func setAppSwitchingEnabled(_ enabled: Bool) {
+        updateActive { $0.appSwitchingEnabled = enabled }
+    }
+
+    func setAppMapping(bundleID: String, pageID: Page.ID) {
+        updateActive { $0.appPageMappings[bundleID] = pageID.uuidString }
+    }
+
+    func removeAppMapping(bundleID: String) {
+        updateActive { $0.appPageMappings.removeValue(forKey: bundleID) }
+    }
+
+    /// The page index mapped to a bundle identifier, if the page still
+    /// exists (it may have been deleted since the mapping was made) and
+    /// app switching is turned on.
+    func pageIndex(forBundleID bundleID: String) -> Int? {
+        let profile = activeProfile
+        guard profile.appSwitchingEnabled,
+              let idString = profile.appPageMappings[bundleID],
+              let pageID = UUID(uuidString: idString)
+        else { return nil }
+        return profile.pages.firstIndex { $0.id == pageID }
     }
 
     private struct SavedState: Codable {

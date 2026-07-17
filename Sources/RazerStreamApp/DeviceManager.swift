@@ -17,6 +17,7 @@ final class DeviceManager: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
+    private let appSwitchMonitor = AppSwitchMonitor()
     weak var store: ProfileStore?
 
     // Runtime control state (not persisted)
@@ -31,6 +32,7 @@ final class DeviceManager: ObservableObject {
         self.store = store
         connectLoop()
         startLiveTileClock()
+        appSwitchMonitor.start(store: store, deviceManager: self)
     }
 
     func stop() {
@@ -38,6 +40,7 @@ final class DeviceManager: ObservableObject {
         reconnectTask?.cancel()
         pushTask?.cancel()
         liveTileTask?.cancel()
+        appSwitchMonitor.stop()
         device?.close()
         device = nil
         connected = false
