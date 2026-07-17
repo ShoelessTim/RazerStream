@@ -27,6 +27,7 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var dragTargetTileIndex: Int?
     @State private var hoveredSelection: Selection?
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -76,6 +77,12 @@ struct ContentView: View {
                 .disabled(!deviceManager.connected)
                 .help("Redraw the current page on the device")
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { !hasCompletedOnboarding },
+            set: { presented in if !presented { hasCompletedOnboarding = true } }
+        )) {
+            OnboardingView()
         }
     }
 
