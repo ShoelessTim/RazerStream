@@ -12,30 +12,34 @@ or commit messages; join clauses with semicolons instead.
 Two tracks: make it look and feel like a first-party Apple tool; make it a real
 open source community project. Everything below is ordered; top items first.
 
-## Track 1: Apple-native UI pass (HIG)
+## Track 1: Apple-native UI pass (HIG) — shipped
 
 Goal: a stranger opens the app and assumes Apple shipped it.
 
-1. Window structure
-   - NavigationSplitView with a real sidebar: Profiles and Pages as a source list;
-     inspector becomes a trailing pane with grouped Form styling
-   - Native toolbar: page add/remove, push-to-device, and appearance controls move
-     into an NSToolbar-style SwiftUI toolbar with SF Symbols
-   - Settings window (Cmd+comma): device options, brightness, sleep timer,
-     launch at login toggle (SMAppService)
-2. Controls and polish
-   - Grouped Form sections with proper insets; footnote help text under fields
-   - Tile grid gets hover states, selection animation, and drag to reorder
-     (drag one tile onto another to swap; drag between pages via the sidebar)
-   - Undo/redo support on profile edits (UndoManager)
-   - Empty states and first-run onboarding card (connect device, grant Accessibility)
-   - Consistent typography; SF Pro text styles instead of fixed point sizes
-3. App identity
-   - Menu bar dropdown gets connection details and quick page switching
-   - About window with credits and the protocol war story
-   - Optional: notch-style HUD confirmation when an action fires
+- [x] NavigationSplitView, three columns: sidebar (pages, real list with
+      double-click rename, drag to reorder, per-row delete), content (device
+      mirror), detail (inspector); profiles deliberately deferred to the
+      app-switching-profiles feature, which needs multi-profile UI anyway
+- [x] Tile drag and drop, Home Screen icon shift semantics (not swap; verified
+      against four cases including both directions and both boundaries)
+- [x] Drag a tile onto a sidebar page row to move it to that page; only
+      completes if the destination has a genuinely empty slot, so it can
+      never silently overwrite existing configuration (verified: normal
+      move, destination full, same-page drop)
+- [x] Profile version history in place of undo/redo, matching Apple's own
+      autosave-plus-versions model (File > Revert To > Browse All Versions):
+      every save snapshots the state, Settings > History browses and
+      restores, Duplicate Profile is the manual named checkpoint
+- [x] Hover states (Dock-style magnify) and animated selection on tiles,
+      knobs, and buttons; non-blocking banner when no device is connected
+      (the mirror stays fully editable, since authoring offline is legitimate)
+- [x] First-run onboarding sheet: plug in the device, grant Accessibility,
+      both live-updating, shown once
 
 Definition of done: side-by-side with System Settings, nothing looks foreign.
+Not done in this pass, intentionally deferred: profile management UI (see
+Track 4, app-switching profiles), native toolbar redesign, About window
+polish, notch-style HUD confirmations.
 
 ## Track 2: Connect choreography (the feedback Tim loves)
 
