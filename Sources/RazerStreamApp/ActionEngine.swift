@@ -9,7 +9,16 @@ enum ActionEngine {
 
     enum PageNav { case goto(Int), next, prev }
 
-    static func perform(_ action: ControlAction, pageHandler: (PageNav) -> Void = { _ in }) {
+    // Device brightness lives on the profile, not the system, so it routes
+    // back through the same closure pattern as page navigation rather than
+    // being handled inline here.
+    enum DeviceAdjustment { case brightnessUp, brightnessDown }
+
+    static func perform(
+        _ action: ControlAction,
+        pageHandler: (PageNav) -> Void = { _ in },
+        deviceHandler: (DeviceAdjustment) -> Void = { _ in }
+    ) {
         switch action {
         case .none:
             break
@@ -62,6 +71,9 @@ enum ActionEngine {
         case .gotoPage(let p): pageHandler(.goto(p))
         case .nextPage:        pageHandler(.next)
         case .prevPage:        pageHandler(.prev)
+
+        case .brightnessUp:   deviceHandler(.brightnessUp)
+        case .brightnessDown: deviceHandler(.brightnessDown)
 
         case .showApp:
             // Reopens the window if it was closed, or fronts it if open;

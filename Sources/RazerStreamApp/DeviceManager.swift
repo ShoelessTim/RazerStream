@@ -259,6 +259,17 @@ final class DeviceManager: ObservableObject {
             case .prev:        store.goToPage(store.currentPageIndex - 1)
             }
             self.pushCurrentPage()
+        } deviceHandler: { [weak self] adjustment in
+            guard let self, let store = self.store else { return }
+            let step = 1
+            let current = Int(store.activeProfile.brightness)
+            let next: Int
+            switch adjustment {
+            case .brightnessUp:   next = min(Int(maxBrightness), current + step)
+            case .brightnessDown: next = max(0, current - step)
+            }
+            store.updateActive { $0.brightness = UInt8(next) }
+            self.pushCurrentPage()
         }
     }
 

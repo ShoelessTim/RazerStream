@@ -15,6 +15,8 @@ enum ControlAction: Codable, Equatable {
     case volumeUp
     case volumeDown
     case volumeMute
+    case brightnessUp                 // steps the device screen brightness
+    case brightnessDown
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
@@ -34,6 +36,8 @@ enum ControlAction: Codable, Equatable {
         case .volumeUp:             return "Volume +"
         case .volumeDown:           return "Volume −"
         case .volumeMute:           return "Mute"
+        case .brightnessUp:         return "Brightness +"
+        case .brightnessDown:       return "Brightness −"
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"
