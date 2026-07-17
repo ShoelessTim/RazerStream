@@ -315,6 +315,26 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    /// Moves a tile's configuration to a different page (dragged onto that
+    /// page's sidebar row). A fixed 12-slot page cannot grow to make room the
+    /// way a same-page shift can, so this only completes when the
+    /// destination has a genuinely empty slot to land in; otherwise it is a
+    /// no-op and nothing on either page is touched. On success the source
+    /// slot is cleared, since this is a move, not a copy.
+    func moveTile(from sourceIndex: Int, sourcePageID: Page.ID, toPageID destPageID: Page.ID) {
+        guard sourcePageID != destPageID else { return }
+        updateActive { profile in
+            guard let sourcePageIdx = profile.pages.firstIndex(where: { $0.id == sourcePageID }),
+                  let destPageIdx = profile.pages.firstIndex(where: { $0.id == destPageID }),
+                  profile.pages[sourcePageIdx].tiles.indices.contains(sourceIndex),
+                  let emptySlot = profile.pages[destPageIdx].tiles.firstIndex(where: { $0 == TileConfig() })
+            else { return }
+            let moved = profile.pages[sourcePageIdx].tiles[sourceIndex]
+            profile.pages[destPageIdx].tiles[emptySlot] = moved
+            profile.pages[sourcePageIdx].tiles[sourceIndex] = TileConfig()
+        }
+    }
+
     // MARK: - Version history
     //
     // Apple's own document apps never expose per-keystroke undo across a

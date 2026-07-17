@@ -7,10 +7,14 @@ enum Selection: Equatable {
     case tile(Int), knob(Int), button(Int)
 }
 
-/// Drag payload for reordering tiles within the grid; in-process only, so a
-/// synthesized content type (not registered in Info.plist) is sufficient.
+/// Drag payload for reordering tiles within the grid, or moving one to a
+/// different page via the sidebar; in-process only, so a synthesized
+/// content type (not registered in Info.plist) is sufficient. The source
+/// page id travels with the payload rather than being looked up at drop
+/// time, since the current page could in principle change mid-drag.
 struct TileDragPayload: Codable, Transferable {
     let sourceIndex: Int
+    let sourcePageID: Page.ID
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .razerStreamTile)
     }
@@ -197,11 +201,13 @@ struct ContentView: View {
 
 private struct PageRow: View {
     @EnvironmentObject var store: ProfileStore
+    @EnvironmentObject var deviceManager: DeviceManager
     let page: Page
 
     @State private var isEditing = false
     @State private var draftName = ""
     @FocusState private var focused: Bool
+    @State private var isDropTarget = false
 
     var body: some View {
         HStack {
@@ -225,6 +231,16 @@ private struct PageRow: View {
         .onChange(of: focused) { _, isFocused in
             if !isFocused && isEditing { commit() }
         }
+        .listRowBackground(isDropTarget ? Color.accentColor.opacity(0.15) : nil)
+        .dropDestination(for: TileDragPayload.self) { items, _ in
+            guard let payload = items.first, payload.sourcePageID != page.id else { return false }
+            store.moveTile(from: payload.sourceIndex, sourcePageID: payload.sourcePageID, toPageID: page.id)
+            deviceManager.pushCurrentPage()
+            return true
+        } isTargeted: { targeted in
+            isDropTarget = targeted
+        }
+        .animation(.easeInOut(duration: 0.1), value: isDropTarget)
     }
 
     private func commit() {
@@ -311,9 +327,9 @@ extension ContentView {
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
         .animation(.easeInOut(duration: 0.12), value: selection)
-        .draggable(TileDragPayload(sourceIndex: index))
+        .draggable(TileDragPayload(sourceIndex: index, sourcePageID: store.currentPage.id))
         .dropDestination(for: TileDragPayload.self) { items, _ in
-            guard let payload = items.first else { return false }
+            guard let payload = items.first, payload.sourcePageID == store.currentPage.id else { return false }
             store.moveTile(from: payload.sourceIndex, to: index)
             deviceManager.pushCurrentPage()
             return true
