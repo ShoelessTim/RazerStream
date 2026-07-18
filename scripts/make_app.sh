@@ -69,6 +69,14 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
                 </array>
             </dict>
         </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>  <string>org.community.razerstream.tile</string>
+            <key>UTTypeDescription</key> <string>RazerStream Tile (internal drag payload)</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+        </dict>
     </array>
 </dict>
 </plist>
