@@ -104,11 +104,21 @@ final class DeviceManager: ObservableObject {
     /// that one is the status light the device manages on its own; it is
     /// never written by this app at all, dimmed or not, so it stays
     /// visible at its own brightness regardless of idle state.
+    ///
+    /// Paced the same as pushCurrentPage's button loop (~20ms apart): firing
+    /// all 7 SET_COLOR commands back to back with no delay overruns the
+    /// device's serial buffer and gets silently dropped, which is exactly
+    /// why this looked like idle dimming did nothing to the LEDs even
+    /// though the identical scaling logic worked fine from the Settings
+    /// slider (a single command at a time, no burst).
     private func setButtonLEDs(device: RazerStreamDevice, page: Page, dimmed: Bool) {
         let scale = ledBrightnessScale * (dimmed ? Self.dimmedLEDFactor : 1)
-        for (i, button) in page.buttons.enumerated() where i > 0 {
-            let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: scale)
-            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+        Task {
+            for (i, button) in page.buttons.enumerated() where i > 0 {
+                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: scale)
+                try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+                try? await Task.sleep(for: .milliseconds(20))
+            }
         }
     }
 
