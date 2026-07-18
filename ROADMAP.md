@@ -46,8 +46,11 @@ polish, notch-style HUD confirmations.
 1. [x] LED cascade on connect: sweep buttons 2 through 8 in a color wave right
    after the tile sweep finishes; doubles as a hardware self-test of every LED
 2. [x] Brightness fade-in on connect instead of a hard jump (shipped v1.4.1)
-3. [x] Haptic tick when a page finishes loading, but only on an actual page
-   change, not every redraw (shipped v1.4.1)
+3. Haptic tick when a page finishes loading. Shipped in v1.4.1, pulled in
+   v1.4.2: it fired well after the page had already visibly finished
+   drawing (only after the whole button-LED loop completed), which read as
+   late and pointless rather than as confirmation. Not worth re-attempting
+   without fixing the timing, and not a priority.
 4. [x] Same cascade runs on demand from the menu bar as "Test device"
 
 ## Track 3: Open source release
@@ -105,10 +108,13 @@ forks and sends pull requests; nothing about his workflow changes.
 5. [x] Haptics: vibrate patterns per action type (shipped v1.4.0); fires on
    button/knob press and touch, plus a Settings > Haptics tab with a pattern
    picker and test button
-6. [x] Touch gestures: two-finger swipe on the screen switches pages (shipped
-   v1.4.1); known limitation, the swipe's starting touches can also fire
-   whatever tile actions are under each finger, since a touch's action fires
-   on press-down same as any other tap
+6. Touch gestures: two-finger swipe on the screen switches pages. Shipped in
+   v1.4.1, pulled in v1.4.2: the physical bezel ridges around the
+   touchscreen make a real two-finger swipe an unpleasant gesture on this
+   hardware, independent of the software (and the known limitation, that a
+   swipe's starting touches could also fire whatever tile actions are under
+   each finger, never got resolved either). Not worth revisiting unless the
+   hardware ergonomics issue itself has a workaround.
 7. [x] Knob acceleration: fast turns scale the action, volume/brightness step
    3x instead of 1x on quick consecutive turns (shipped v1.4.1)
 8. [x] Device sleep: dim after N minutes idle, wake on any input; off by
