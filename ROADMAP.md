@@ -169,10 +169,14 @@ forks and sends pull requests; nothing about his workflow changes.
      from the general-purpose press action that already exists). Would
      slot into the same KnobRotationMode picker as Volume/Brightness/Page
      Nav/Track.
-   - LED button brightness as a knob rotation preset (turn a knob to dim
-     the 7 configurable button LEDs directly, not just tied to idle
-     dimming). Idle-tied dimming shipped in v1.4.2 (see below); a
-     manually-adjustable version is still open.
+   - [x] LED button brightness as a knob rotation preset, shipped v1.4.3:
+     Profile gained a persistent `ledBrightness` level (0...10, same
+     convention as screen brightness), a new Button LED Brightness entry
+     in the knob Rotation picker (and as an assignable action generally),
+     and a matching Settings > Device slider. All four LED-writing sites
+     (page push, toggle-button state, the idle-dim/wake pair, and the
+     connect LED cascade's settle step) scale by this level; idle dimming
+     multiplies further on top of it rather than overriding it.
    - Multi-action macros: fire a sequence of ControlActions from one tap,
      not just a single action. Called out as "a must" to be a viable
      Loupedeck replacement. Real scope decision needed: a new

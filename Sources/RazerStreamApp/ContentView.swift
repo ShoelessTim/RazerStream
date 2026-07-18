@@ -591,6 +591,8 @@ struct ActionEditor: View {
         case volumeMute = "Mute"
         case brightnessUp = "Brightness +"
         case brightnessDown = "Brightness −"
+        case ledBrightnessUp = "Button LED Brightness +"
+        case ledBrightnessDown = "Button LED Brightness −"
         case gotoPage = "Go to Page"
         case nextPage = "Next Page"
         case prevPage = "Previous Page"
@@ -666,6 +668,8 @@ struct ActionEditor: View {
         case .volumeMute:          kind = .volumeMute
         case .brightnessUp:        kind = .brightnessUp
         case .brightnessDown:      kind = .brightnessDown
+        case .ledBrightnessUp:     kind = .ledBrightnessUp
+        case .ledBrightnessDown:   kind = .ledBrightnessDown
         case .gotoPage(let p):     kind = .gotoPage;   pageIndex = p
         case .nextPage:            kind = .nextPage
         case .prevPage:            kind = .prevPage
@@ -689,6 +693,8 @@ struct ActionEditor: View {
         case .volumeMute: action = .volumeMute
         case .brightnessUp:   action = .brightnessUp
         case .brightnessDown: action = .brightnessDown
+        case .ledBrightnessUp:   action = .ledBrightnessUp
+        case .ledBrightnessDown: action = .ledBrightnessDown
         case .gotoPage:   action = .gotoPage(pageIndex)
         case .nextPage:   action = .nextPage
         case .prevPage:   action = .prevPage

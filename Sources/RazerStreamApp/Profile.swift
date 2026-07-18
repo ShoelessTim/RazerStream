@@ -17,6 +17,8 @@ enum ControlAction: Codable, Equatable {
     case volumeMute
     case brightnessUp                 // steps the device screen brightness
     case brightnessDown
+    case ledBrightnessUp              // steps the 7 configurable button LEDs
+    case ledBrightnessDown
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
@@ -38,6 +40,8 @@ enum ControlAction: Codable, Equatable {
         case .volumeMute:           return "Mute"
         case .brightnessUp:         return "Brightness +"
         case .brightnessDown:       return "Brightness −"
+        case .ledBrightnessUp:      return "Button LED Brightness +"
+        case .ledBrightnessDown:    return "Button LED Brightness −"
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"
@@ -199,6 +203,7 @@ struct Profile: Codable, Equatable, Identifiable {
     var name: String = "Default"
     var pages: [Page] = [Page(name: "Page 1")]
     var brightness: UInt8 = 8
+    var ledBrightness: UInt8 = 10   // 0...10, matching screen brightness's convention; the 7 configurable button LEDs are scaled by this fraction of their configured color
 
     // App-switching: which page to show automatically when a given app
     // becomes frontmost. Keyed by bundle identifier rather than app name,
@@ -217,7 +222,7 @@ struct Profile: Codable, Equatable, Identifiable {
     var knobIsGlobal: [Bool] = Array(repeating: false, count: 6)
 
     init(id: UUID = UUID(), name: String = "Default", pages: [Page] = [Page(name: "Page 1")],
-         brightness: UInt8 = 8, appSwitchingEnabled: Bool = false,
+         brightness: UInt8 = 8, ledBrightness: UInt8 = 10, appSwitchingEnabled: Bool = false,
          appPageMappings: [String: String] = [:],
          globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6),
          knobIsGlobal: [Bool] = Array(repeating: false, count: 6)) {
@@ -225,6 +230,7 @@ struct Profile: Codable, Equatable, Identifiable {
         self.name = name
         self.pages = pages
         self.brightness = brightness
+        self.ledBrightness = ledBrightness
         self.appSwitchingEnabled = appSwitchingEnabled
         self.appPageMappings = appPageMappings
         self.globalKnobs = globalKnobs
@@ -240,6 +246,7 @@ struct Profile: Codable, Equatable, Identifiable {
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Default"
         pages = try c.decodeIfPresent([Page].self, forKey: .pages) ?? [Page(name: "Page 1")]
         brightness = try c.decodeIfPresent(UInt8.self, forKey: .brightness) ?? 8
+        ledBrightness = try c.decodeIfPresent(UInt8.self, forKey: .ledBrightness) ?? 10
         appSwitchingEnabled = try c.decodeIfPresent(Bool.self, forKey: .appSwitchingEnabled) ?? false
         appPageMappings = try c.decodeIfPresent([String: String].self, forKey: .appPageMappings) ?? [:]
         globalKnobs = try c.decodeIfPresent([KnobConfig].self, forKey: .globalKnobs)

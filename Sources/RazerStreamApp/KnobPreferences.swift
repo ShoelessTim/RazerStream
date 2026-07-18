@@ -24,6 +24,7 @@ enum KnobRotationMode: Equatable, CaseIterable {
     case none
     case volume
     case brightness
+    case ledBrightness
     case pageNavigation
     case mediaTrack
     case custom
@@ -33,6 +34,7 @@ enum KnobRotationMode: Equatable, CaseIterable {
         case .none:          return "None"
         case .volume:        return "Volume"
         case .brightness:    return "Screen Brightness"
+        case .ledBrightness: return "Button LED Brightness"
         case .pageNavigation: return "Page Navigation"
         case .mediaTrack:    return "Next / Previous Track"
         case .custom:        return "Custom…"
@@ -45,6 +47,7 @@ enum KnobRotationMode: Equatable, CaseIterable {
         switch self {
         case .volume:         return ("raises the volume", "lowers it")
         case .brightness:     return ("brightens the screen", "dims it")
+        case .ledBrightness:  return ("brightens the button LEDs", "dims them")
         case .pageNavigation: return ("goes to the next page", "goes back")
         case .mediaTrack:     return ("skips to the next track", "goes to the previous one")
         case .none, .custom:  return nil
@@ -55,6 +58,7 @@ enum KnobRotationMode: Equatable, CaseIterable {
         if clockwise == .none && counterClockwise == .none { return .none }
         if isPair(clockwise, counterClockwise, .volumeUp, .volumeDown) { return .volume }
         if isPair(clockwise, counterClockwise, .brightnessUp, .brightnessDown) { return .brightness }
+        if isPair(clockwise, counterClockwise, .ledBrightnessUp, .ledBrightnessDown) { return .ledBrightness }
         if isPair(clockwise, counterClockwise, .nextPage, .prevPage) { return .pageNavigation }
         if isPair(clockwise, counterClockwise, .mediaNext, .mediaPrevious) { return .mediaTrack }
         return .custom
@@ -68,6 +72,8 @@ enum KnobRotationMode: Equatable, CaseIterable {
             return clockwiseIncreases ? (.volumeUp, .volumeDown) : (.volumeDown, .volumeUp)
         case .brightness:
             return clockwiseIncreases ? (.brightnessUp, .brightnessDown) : (.brightnessDown, .brightnessUp)
+        case .ledBrightness:
+            return clockwiseIncreases ? (.ledBrightnessUp, .ledBrightnessDown) : (.ledBrightnessDown, .ledBrightnessUp)
         case .pageNavigation:
             return clockwiseIncreases ? (.nextPage, .prevPage) : (.prevPage, .nextPage)
         case .mediaTrack:

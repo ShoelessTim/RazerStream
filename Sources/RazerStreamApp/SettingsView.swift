@@ -33,6 +33,7 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var brightness: Double = 8
+    @State private var ledBrightness: Double = 10
     @State private var hapticsEnabled = HapticFeedback.isEnabled
     @State private var hapticPattern = HapticFeedback.pattern
     @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
@@ -112,6 +113,24 @@ struct SettingsView: View {
             }
 
             Section {
+                HStack {
+                    Image(systemName: "circle.dotted")
+                    Slider(value: $ledBrightness, in: 0...10, step: 1)
+                    Image(systemName: "circle.fill")
+                }
+                .onChange(of: ledBrightness) { _, v in
+                    store.updateActive { $0.ledBrightness = UInt8(v) }
+                    deviceManager.pushCurrentPage()
+                }
+            } header: {
+                Text("Button LEDs")
+            } footer: {
+                Text("Also assignable to a knob (Rotation > Button LED Brightness). The status light isn't affected either way.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Picker("Turning right (clockwise)", selection: $clockwiseIncreases) {
                     Text("Increases").tag(true)
                     Text("Decreases").tag(false)
@@ -157,6 +176,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .onAppear {
             brightness = Double(store.activeProfile.brightness)
+            ledBrightness = Double(store.activeProfile.ledBrightness)
             clockwiseIncreases = KnobDirection.clockwiseIncreases
             idleDimmingEnabled = IdleDimming.isEnabled
             idleDimmingMinutes = IdleDimming.minutes

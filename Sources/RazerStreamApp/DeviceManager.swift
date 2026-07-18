@@ -105,15 +105,10 @@ final class DeviceManager: ObservableObject {
     /// never written by this app at all, dimmed or not, so it stays
     /// visible at its own brightness regardless of idle state.
     private func setButtonLEDs(device: RazerStreamDevice, page: Page, dimmed: Bool) {
+        let scale = ledBrightnessScale * (dimmed ? Self.dimmedLEDFactor : 1)
         for (i, button) in page.buttons.enumerated() where i > 0 {
-            let (r, g, b) = Self.rgb(fromHex: button.ledHex)
-            let scale = dimmed ? Self.dimmedLEDFactor : 1
-            try? device.send(.setButtonColor(
-                button: 7 + i,
-                r: UInt8(Double(r) * scale),
-                g: UInt8(Double(g) * scale),
-                b: UInt8(Double(b) * scale)
-            ))
+            let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: scale)
+            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
         }
     }
 
@@ -331,7 +326,7 @@ final class DeviceManager: ObservableObject {
             run(nowOn ? button.action : button.releaseAction)
             // LED shows state: configured color when on, off when off
             if index > 0, let device {
-                let (r, g, b) = nowOn ? Self.rgb(fromHex: button.ledHex) : (0, 0, 0)
+                let (r, g, b) = nowOn ? Self.scaledRGB(fromHex: button.ledHex, scale: ledBrightnessScale) : (0, 0, 0)
                 try? device.send(.setButtonColor(button: 7 + index, r: r, g: g, b: b))
             }
         case .shiftPage(let target):
@@ -392,13 +387,20 @@ final class DeviceManager: ObservableObject {
         } deviceHandler: { [weak self] adjustment, amount in
             guard let self, let store = self.store else { return }
             let step = amount
-            let current = Int(store.activeProfile.brightness)
-            let next: Int
             switch adjustment {
-            case .brightnessUp:   next = min(Int(maxBrightness), current + step)
-            case .brightnessDown: next = max(0, current - step)
+            case .brightnessUp, .brightnessDown:
+                let current = Int(store.activeProfile.brightness)
+                let next = adjustment == .brightnessUp
+                    ? min(Int(maxBrightness), current + step)
+                    : max(0, current - step)
+                store.updateActive { $0.brightness = UInt8(next) }
+            case .ledBrightnessUp, .ledBrightnessDown:
+                let current = Int(store.activeProfile.ledBrightness)
+                let next = adjustment == .ledBrightnessUp
+                    ? min(Int(maxBrightness), current + step)
+                    : max(0, current - step)
+                store.updateActive { $0.ledBrightness = UInt8(next) }
             }
-            store.updateActive { $0.brightness = UInt8(next) }
             self.pushCurrentPage()
         }
     }
@@ -446,9 +448,10 @@ final class DeviceManager: ObservableObject {
 
             // Physical button LEDs (device IDs 7 to 14). Index 0 / ID 7 is the
             // status light; the device manages it, never write it.
+            let ledScale = self.ledBrightnessScale
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
-                let (r, g, b) = Self.rgb(fromHex: button.ledHex)
+                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
@@ -535,9 +538,10 @@ final class DeviceManager: ObservableObject {
             }
         }
         try? await Task.sleep(for: .milliseconds(300))
+        let ledScale = ledBrightnessScale
         for i in 1..<8 {
             if Task.isCancelled { return }
-            let (r, g, b) = Self.rgb(fromHex: page.buttons[i].ledHex)
+            let (r, g, b) = Self.scaledRGB(fromHex: page.buttons[i].ledHex, scale: ledScale)
             try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
             try? await Task.sleep(for: .milliseconds(50))
         }
@@ -549,5 +553,19 @@ final class DeviceManager: ObservableObject {
         var v: UInt64 = 0
         Scanner(string: h).scanHexInt64(&v)
         return (UInt8((v >> 16) & 0xFF), UInt8((v >> 8) & 0xFF), UInt8(v & 0xFF))
+    }
+
+    /// `rgb(fromHex:)` scaled by an arbitrary fraction; used for both the
+    /// manual Button LED Brightness level and idle dimming, so a button's
+    /// color on the wire always reflects the profile's current LED
+    /// brightness, not just its raw configured hex.
+    private static func scaledRGB(fromHex hex: String, scale: Double) -> (UInt8, UInt8, UInt8) {
+        let (r, g, b) = rgb(fromHex: hex)
+        return (UInt8(Double(r) * scale), UInt8(Double(g) * scale), UInt8(Double(b) * scale))
+    }
+
+    /// The manual Button LED Brightness level (0...10) as a 0...1 fraction.
+    private var ledBrightnessScale: Double {
+        Double(store?.activeProfile.ledBrightness ?? 10) / 10
     }
 }
