@@ -14,15 +14,31 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 
 ## Features
 
-- Full control of all 8 LCD tiles, the touchscreen surface, 6 rotary encoders
-  (turn and press), and the 8 physical buttons with color LEDs
-- Draw labels, colors, SF Symbols icons, or custom images to any tile
+- Full control of all 12 touchscreen tiles, 6 rotary encoders (turn and
+  press), and the 8 physical buttons with color LEDs
+- Draw labels, colors, SF Symbols icons, or custom images to any tile or knob;
+  a searchable icon library (SF Symbols, bundled Lucide/Bootstrap packs, your
+  own folders of PNG/SVG files) with a Recent tab
 - Behavior modes per control: tap, toggle (stateful, like play/pause),
   momentary (hold), and shift (hold to reveal another page)
 - Actions: open app, open URL, shell command, AppleScript, recorded keystroke,
-  media keys (play/pause, next, previous), volume with the native on-screen HUD,
-  page navigation, and show the app window
-- Multiple pages per profile; switch or use them as shift layers
+  media keys, volume with the native on-screen HUD, screen brightness, page
+  navigation, and show the app window
+- Knob rotation presets: Volume, Screen Brightness, Page Navigation, and
+  Track skip are each a single choice instead of hand-wiring clockwise and
+  counterclockwise separately, with one Settings toggle to flip which
+  direction counts as "up" for all of them; fast turns step further. A knob
+  can also be pinned so its config is shared across every page instead of
+  set up per page.
+- Multiple pages per profile; switch manually, use shift-hold layers, or let
+  RazerStream switch pages automatically based on which app is frontmost
+- Live tiles that redraw themselves: a clock, and a CPU/RAM usage meter
+- Haptic feedback on press (device-dependent), with a pattern picker
+- Idle dimming: screen and button LEDs fade after inactivity and wake on any
+  input; the status light is never touched, so connection state always
+  stays visible
+- Export or import a single profile as a standalone `.razerstream` file
+- Profile version history (autosave snapshots) in place of undo/redo
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
@@ -74,9 +90,10 @@ swift run rstream brightness 7
 
 ## Project layout
 
-- `Sources/RazerStreamKit` the protocol library; serial transport, WebSocket
-  framing, device commands and events. Depend on this alone to talk to the
-  hardware from any Swift program.
+- `Packages/RazerStreamKit` the protocol library, its own standalone Swift
+  package; serial transport, WebSocket framing, device commands and events.
+  Depend on this alone (by local path, or fork it out) to talk to the
+  hardware from any Swift program without pulling in the CLI or the app.
 - `Sources/RazerStreamCLI` the `rstream` command-line tool.
 - `Sources/RazerStreamApp` the SwiftUI application.
 - `PROTOCOL.md` the reverse-engineered wire protocol, documented byte by byte.

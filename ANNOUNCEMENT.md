@@ -3,6 +3,13 @@
 Ready to paste for Reddit (r/Loupedeck, r/razer, r/macapps), Razer Insider,
 or as a Show HN. Trim to taste.
 
+Already posted to r/loupedeck (2026-07-15, v1.0) with a follow-up
+(2026-07-17, v1.4.0) covering what shipped since launch; check that thread
+for real community feedback before reusing this on a new platform, since
+some of it (Loupedeck CT support, a plugin API, macros) is already answered
+or in progress. This post itself is still accurate as an initial pitch for
+platforms that haven't seen it yet.
+
 Title: RazerStream: a free, native macOS app that revives the orphaned Razer Stream Controller
 
 When Logitech acquired Loupedeck and retired the software, the Razer Stream
