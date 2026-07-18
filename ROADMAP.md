@@ -97,8 +97,11 @@ forks and sends pull requests; nothing about his workflow changes.
    - User icon packs: point the app at any folder of PNG/SVG files and it
      becomes a searchable library tab; this also covers Stream Deck icon packs
    - License text shipped with each bundled pack
-4. Live tiles: [x] clock (shipped v1.1.0); still open: now playing with album
-   art, CPU/RAM meter, calendar next-up; refresh loop redraws only dirty tiles
+4. Live tiles: [x] clock (shipped v1.1.0), [x] CPU/RAM meter (shipped
+   v1.4.1; two bars on a tile, compact text on a knob strip, refreshes every
+   2 seconds via the standard Mach host APIs, no private frameworks); still
+   open: now playing with album art, calendar next-up; refresh loop redraws
+   only dirty tiles
 5. [x] Haptics: vibrate patterns per action type (shipped v1.4.0); fires on
    button/knob press and touch, plus a Settings > Haptics tab with a pattern
    picker and test button
