@@ -19,6 +19,8 @@ enum ControlAction: Codable, Equatable {
     case brightnessDown
     case ledBrightnessUp              // steps the 7 configurable button LEDs
     case ledBrightnessDown
+    case bothBrightnessUp             // steps screen and button LED brightness together
+    case bothBrightnessDown
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
@@ -42,6 +44,8 @@ enum ControlAction: Codable, Equatable {
         case .brightnessDown:       return "Brightness −"
         case .ledBrightnessUp:      return "Button LED Brightness +"
         case .ledBrightnessDown:    return "Button LED Brightness −"
+        case .bothBrightnessUp:     return "Brightness (Screen + LEDs) +"
+        case .bothBrightnessDown:   return "Brightness (Screen + LEDs) −"
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"

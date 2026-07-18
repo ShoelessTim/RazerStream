@@ -176,7 +176,17 @@ forks and sends pull requests; nothing about his workflow changes.
      and a matching Settings > Device slider. All four LED-writing sites
      (page push, toggle-button state, the idle-dim/wake pair, and the
      connect LED cascade's settle step) scale by this level; idle dimming
-     multiplies further on top of it rather than overriding it.
+     multiplies further on top of it rather than overriding it. Fixed in
+     v1.4.3 too: idle dimming's LED writes had no pacing between the 7
+     SET_COLOR commands, which the device's serial buffer silently drops
+     without ~20ms spacing; the Settings slider path already paced
+     correctly (via pushCurrentPage), which is what made this fixable
+     without guessing.
+   - [x] Combined "Screen + LED Brightness" knob preset, shipped v1.4.4: one
+     knob can now step both brightness levels together in a single turn
+     (new `.bothBrightnessUp/Down` ControlAction), instead of needing two
+     separate knobs. First real case of "one control does two device
+     things at once"; not a general macro system, just a dedicated action.
    - Multi-action macros: fire a sequence of ControlActions from one tap,
      not just a single action. Called out as "a must" to be a viable
      Loupedeck replacement. Real scope decision needed: a new

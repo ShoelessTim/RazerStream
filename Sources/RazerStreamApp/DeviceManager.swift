@@ -410,6 +410,19 @@ final class DeviceManager: ObservableObject {
                     ? min(Int(maxBrightness), current + step)
                     : max(0, current - step)
                 store.updateActive { $0.ledBrightness = UInt8(next) }
+            case .bothBrightnessUp, .bothBrightnessDown:
+                let currentScreen = Int(store.activeProfile.brightness)
+                let currentLED = Int(store.activeProfile.ledBrightness)
+                let nextScreen = adjustment == .bothBrightnessUp
+                    ? min(Int(maxBrightness), currentScreen + step)
+                    : max(0, currentScreen - step)
+                let nextLED = adjustment == .bothBrightnessUp
+                    ? min(Int(maxBrightness), currentLED + step)
+                    : max(0, currentLED - step)
+                store.updateActive {
+                    $0.brightness = UInt8(nextScreen)
+                    $0.ledBrightness = UInt8(nextLED)
+                }
             }
             self.pushCurrentPage()
         }

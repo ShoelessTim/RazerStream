@@ -12,7 +12,11 @@ enum ActionEngine {
     // Device brightness lives on the profile, not the system, so it routes
     // back through the same closure pattern as page navigation rather than
     // being handled inline here.
-    enum DeviceAdjustment { case brightnessUp, brightnessDown, ledBrightnessUp, ledBrightnessDown }
+    enum DeviceAdjustment {
+        case brightnessUp, brightnessDown
+        case ledBrightnessUp, ledBrightnessDown
+        case bothBrightnessUp, bothBrightnessDown
+    }
 
     static func perform(
         _ action: ControlAction,
@@ -77,6 +81,8 @@ enum ActionEngine {
         case .brightnessDown: deviceHandler(.brightnessDown, amount)
         case .ledBrightnessUp:   deviceHandler(.ledBrightnessUp, amount)
         case .ledBrightnessDown: deviceHandler(.ledBrightnessDown, amount)
+        case .bothBrightnessUp:   deviceHandler(.bothBrightnessUp, amount)
+        case .bothBrightnessDown: deviceHandler(.bothBrightnessDown, amount)
 
         case .showApp:
             // Reopens the window if it was closed, or fronts it if open;
