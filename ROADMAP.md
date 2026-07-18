@@ -194,6 +194,18 @@ forks and sends pull requests; nothing about his workflow changes.
      (new `.bothBrightnessUp/Down` ControlAction), instead of needing two
      separate knobs. First real case of "one control does two device
      things at once"; not a general macro system, just a dedicated action.
+   - [x] Real bug fixed in v1.4.7: turning a knob assigned to LED Brightness
+     or Screen + LED Brightness silently never reached the LEDs, while
+     Screen Brightness alone worked fine. Root cause: all three routed
+     through `pushCurrentPage()`, which redraws tiles, then knob zones,
+     then buttons last, over a second end to end; every subsequent knob
+     detent cancels whatever push was still in flight. Screen brightness
+     is sent as the very first command, so it survived; button LEDs, drawn
+     last, essentially never did, since continuously turning a knob (the
+     normal way to dial one in) retriggers pushCurrentPage on every tick.
+     Added `pushBrightness()`, a dedicated lightweight push (just
+     setBrightness + button colors, no tile/knob redraw) on its own task,
+     used by both the knob presets and the Settings sliders now.
    - Multi-action macros: fire a sequence of ControlActions from one tap,
      not just a single action. Called out as "a must" to be a viable
      Loupedeck replacement. Real scope decision needed: a new

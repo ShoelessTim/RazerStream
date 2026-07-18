@@ -16,6 +16,7 @@ final class DeviceManager: ObservableObject {
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
+    private var brightnessTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
     private var systemMeterTask: Task<Void, Never>?
     private var idleCheckTask: Task<Void, Never>?
@@ -424,7 +425,38 @@ final class DeviceManager: ObservableObject {
                     $0.ledBrightness = UInt8(nextLED)
                 }
             }
-            self.pushCurrentPage()
+            self.pushBrightness()
+        }
+    }
+
+    /// Sends just the screen brightness and button LED colors, without
+    /// redrawing all 12 tiles and 6 knob zones the way pushCurrentPage does.
+    ///
+    /// This matters beyond being wasteful: pushCurrentPage draws tiles, then
+    /// knob zones, then buttons last, and can take over a second end to end;
+    /// every subsequent call cancels whatever's still in flight. Turning a
+    /// knob continuously (the normal way to dial in a brightness level)
+    /// fires pushCurrentPage on every detent, so each turn was cancelling
+    /// the previous one before it ever reached the button-LED section —
+    /// screen brightness survived because it's sent first, but the LEDs
+    /// essentially never got written. Runs on its own task, independent of
+    /// pushTask, so a brightness change and a full page redraw don't cancel
+    /// each other.
+    func pushBrightness() {
+        guard let device, let store else { return }
+        let profile = store.activeProfile
+        let page = store.resolvedCurrentPage
+        let ledScale = ledBrightnessScale
+
+        brightnessTask?.cancel()
+        brightnessTask = Task {
+            try? device.send(.setBrightness(profile.brightness))
+            for (i, button) in page.buttons.enumerated() where i > 0 {
+                if Task.isCancelled { return }
+                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
+                try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+                try? await Task.sleep(for: .milliseconds(20))
+            }
         }
     }
 

@@ -108,7 +108,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: brightness) { _, v in
                     store.updateActive { $0.brightness = UInt8(v) }
-                    deviceManager.pushCurrentPage()
+                    deviceManager.pushBrightness()
                 }
             }
 
@@ -120,7 +120,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: ledBrightness) { _, v in
                     store.updateActive { $0.ledBrightness = UInt8(v) }
-                    deviceManager.pushCurrentPage()
+                    deviceManager.pushBrightness()
                 }
             } header: {
                 Text("Button LEDs")
