@@ -112,7 +112,12 @@ forks and sends pull requests; nothing about his workflow changes.
 7. [x] Knob acceleration: fast turns scale the action, volume/brightness step
    3x instead of 1x on quick consecutive turns (shipped v1.4.1)
 8. [x] Device sleep: dim after N minutes idle, wake on any input; off by
-   default, Settings > Device > "Dim after inactivity" (shipped v1.4.1)
+   default, Settings > Device > "Dim after inactivity" (shipped v1.4.1).
+   Extended in v1.4.2 to also dim the 7 configurable button LEDs (to ~12%
+   of their configured color) alongside the screen, restoring both on the
+   next input; the status light (button 7 / physical ID 7) is never
+   touched by this app at all regardless of idle state, so it stays lit at
+   its own device-managed brightness as a constant connection indicator.
 9. Webhooks and Home Assistant/MQTT actions
 10. Plugin API: action providers as separate processes or scripts. Concrete
     requirements from a real use case (r/loupedeck, u/Cuica, 2026-07-16; a
@@ -151,6 +156,36 @@ forks and sends pull requests; nothing about his workflow changes.
    state that fights RazerStream. Worth an explicit test and a README/FAQ
    note once answered, since it's clearly a common worry for people coming
    from the dead app.
+3. From a v1.4.0 installer, filed as GitHub issues plus direct feedback
+   (2026-07-18):
+   - More knob rotation presets: mouse vertical/horizontal scroll, and a
+     click action for knob press specifically tied to scrolling (distinct
+     from the general-purpose press action that already exists). Would
+     slot into the same KnobRotationMode picker as Volume/Brightness/Page
+     Nav/Track.
+   - LED button brightness as a knob rotation preset (turn a knob to dim
+     the 7 configurable button LEDs directly, not just tied to idle
+     dimming). Idle-tied dimming shipped in v1.4.2 (see below); a
+     manually-adjustable version is still open.
+   - Multi-action macros: fire a sequence of ControlActions from one tap,
+     not just a single action. Called out as "a must" to be a viable
+     Loupedeck replacement. Real scope decision needed: a new
+     `.sequence([ControlAction])` case is the obvious shape, but delays
+     between steps, and what happens if one step fails, need actual design
+     thought before building.
+   - Default/application profiles with their own pages, replacing
+     page-switching as the way "mapped apps" work: instead of one profile
+     with app-switching mapping bundle IDs to pages within it, each app
+     would get its own full profile. Overlaps with Track 4 item 1
+     (app-switching pages, already shipped) and the deferred Track 1
+     profile-management UI; whether to extend the existing page-per-app
+     model or actually add profile-per-app is a real design fork, not
+     picked yet.
+   - Context, from the same feedback: "Logitech and Loupedeck are getting
+     more aggressive blocking this device... if you have Logi Options+
+     installed" — worth keeping in mind for the open uninstall-coexistence
+     question above; may not be a RazerStream-side fix at all if it's
+     Logi Options+ actively interfering rather than just port contention.
 
 ## Track 5: Other platforms (community owned)
 

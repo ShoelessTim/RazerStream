@@ -140,7 +140,7 @@ struct SettingsView: View {
                     .onChange(of: idleDimmingMinutes) { _, v in IdleDimming.minutes = v }
                 }
             } footer: {
-                Text("Dims the panel after no button, knob, or touch input; any input wakes it back up to its normal brightness.")
+                Text("Dims the panel and button LEDs after no button, knob, or touch input; any input wakes them back up. The status light is never dimmed, so connection state always stays visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

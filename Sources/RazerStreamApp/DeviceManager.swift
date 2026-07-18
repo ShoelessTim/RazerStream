@@ -87,20 +87,46 @@ final class DeviceManager: ObservableObject {
     }
 
     private func checkIdle() {
-        guard IdleDimming.isEnabled, connected, !isDimmed, let device else { return }
+        guard IdleDimming.isEnabled, connected, !isDimmed, let device, let store else { return }
         let timeout = TimeInterval(IdleDimming.minutes * 60)
         guard timeout > 0, Date().timeIntervalSince(lastInputAt) >= timeout else { return }
         isDimmed = true
         try? device.send(.setBrightness(1))
+        setButtonLEDs(device: device, page: store.resolvedCurrentPage, dimmed: true)
     }
 
-    /// Marks real device input (button, knob, touch); wakes the panel back
-    /// to its configured brightness first, if it had dimmed for being idle.
+    /// Marks real device input (button, knob, touch); wakes the panel and
+    /// button LEDs back to their configured brightness first, if they had
+    /// dimmed for being idle.
     private func noteInput() {
         lastInputAt = Date()
         guard isDimmed, let device, let store else { return }
         isDimmed = false
         try? device.send(.setBrightness(store.activeProfile.brightness))
+        setButtonLEDs(device: device, page: store.resolvedCurrentPage, dimmed: false)
+    }
+
+    // Faint but still visible, roughly matching the touchscreen's own
+    // dim-to-lowest-step level.
+    private static let dimmedLEDFactor = 0.12
+
+    /// Scales every configurable button LED down to a faint glow (or back
+    /// up to its configured color). Index 0 / physical ID 7 is always
+    /// skipped, same as every other place that writes button LEDs, since
+    /// that one is the status light the device manages on its own; it is
+    /// never written by this app at all, dimmed or not, so it stays
+    /// visible at its own brightness regardless of idle state.
+    private func setButtonLEDs(device: RazerStreamDevice, page: Page, dimmed: Bool) {
+        for (i, button) in page.buttons.enumerated() where i > 0 {
+            let (r, g, b) = Self.rgb(fromHex: button.ledHex)
+            let scale = dimmed ? Self.dimmedLEDFactor : 1
+            try? device.send(.setButtonColor(
+                button: 7 + i,
+                r: UInt8(Double(r) * scale),
+                g: UInt8(Double(g) * scale),
+                b: UInt8(Double(b) * scale)
+            ))
+        }
     }
 
     // MARK: - Live tiles (self-updating content: clock, CPU/RAM meter)
