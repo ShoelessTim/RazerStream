@@ -106,8 +106,12 @@ forks and sends pull requests; nothing about his workflow changes.
    disk free space (shipped v1.4.5; a selectable mounted volume, defaulting
    to the boot drive, via the standard URL resource-values API; rides the
    existing once-a-minute clock refresh rather than a new fast timer, since
-   free space doesn't change quickly); still open: now playing with album
-   art, calendar next-up; refresh loop redraws only dirty tiles
+   free space doesn't change quickly). Knob-strip renderings for CPU/RAM
+   and Disk Space switched from text-only to small pie charts in v1.4.6
+   (CPU above RAM; a single pie above the free-space text for Disk Space),
+   verified by rendering actual output to a PNG and inspecting it before
+   shipping, not just checking it compiled. Still open: now playing with
+   album art, calendar next-up; refresh loop redraws only dirty tiles
 5. [x] Haptics: vibrate patterns per action type (shipped v1.4.0); fires on
    button/knob press and touch, plus a Settings > Haptics tab with a pattern
    picker and test button

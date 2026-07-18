@@ -298,15 +298,46 @@ enum TileRenderer {
         drawMeterBar(fraction: ram, in: ctx, x: barX, y: s * 0.16, width: barWidth, height: barHeight)
     }
 
-    /// Compact text-only readout, sized for the 60-wide knob strip; a bar
-    /// doesn't have room to read as a bar at that width.
+    /// Two small pie charts, sized for the 60-wide knob strip: CPU above,
+    /// RAM below, each with its percentage underneath. A bar doesn't have
+    /// room to read as a bar at this width; a pie reads at a glance.
     private static func drawCompactSystemMeter(in ctx: CGContext, width: Int, height: Int) {
         let cpu = SystemMeter.cpuUsage()
         let ram = SystemMeter.memoryUsage()
+        let w = CGFloat(width), h = CGFloat(height)
+
+        drawPieChart(fraction: cpu, in: ctx, center: CGPoint(x: w / 2, y: h * 0.78), radius: 13)
         drawText("CPU \(Int(cpu * 100))%", in: ctx, canvas: width, height: height,
-                 fontSize: 10, yOffset: CGFloat(height) * 0.44)
+                 fontSize: 9, yOffset: h * 0.56)
+
+        drawPieChart(fraction: ram, in: ctx, center: CGPoint(x: w / 2, y: h * 0.34), radius: 13)
         drawText("RAM \(Int(ram * 100))%", in: ctx, canvas: width, height: height,
-                 fontSize: 10, yOffset: CGFloat(height) * 0.30)
+                 fontSize: 9, yOffset: h * 0.12)
+    }
+
+    /// Fills clockwise from 12 o'clock as `fraction` rises from 0 to 1; red
+    /// past 85%, matching the danger convention the usage bars already use.
+    private static func drawPieChart(fraction: Double, in ctx: CGContext, center: CGPoint, radius: CGFloat) {
+        ctx.setFillColor(CGColor(gray: 1, alpha: 0.15))
+        ctx.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+
+        let clamped = max(0, min(1, fraction))
+        guard clamped > 0 else { return }
+
+        ctx.setFillColor(clamped > 0.85
+            ? CGColor(red: 0.95, green: 0.3, blue: 0.3, alpha: 1)
+            : CGColor(red: 0.3, green: 0.85, blue: 0.5, alpha: 1))
+
+        let steps = 60
+        let sweepSteps = max(1, Int(Double(steps) * clamped))
+        ctx.move(to: center)
+        for i in 0...sweepSteps {
+            let t = Double(i) / Double(steps)
+            let angle = CGFloat.pi / 2 - CGFloat(t) * 2 * .pi   // start at 12 o'clock, sweep clockwise
+            ctx.addLine(to: CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle)))
+        }
+        ctx.closePath()
+        ctx.fillPath()
     }
 
     /// A single usage bar (fills with how much is USED, so it reads red
@@ -328,16 +359,17 @@ enum TileRenderer {
                   fontSize: 11, yOffset: s * 0.28)
     }
 
-    /// Compact text-only readout, sized for the 60-wide knob strip.
+    /// A pie chart (used fraction) above the free-space amount, sized for
+    /// the 60-wide knob strip, same style as the CPU/RAM pies.
     private static func drawCompactDiskSpace(in ctx: CGContext, width: Int, height: Int, volumePath: String) {
         guard let reading = DiskSpaceMeter.reading(forVolumeAt: volumePath) else {
             drawText("No Data", in: ctx, canvas: width, height: height, fontSize: 10, yOffset: nil)
             return
         }
-        drawText("DISK", in: ctx, canvas: width, height: height,
-                  fontSize: 10, yOffset: CGFloat(height) * 0.44)
+        let w = CGFloat(width), h = CGFloat(height)
+        drawPieChart(fraction: reading.usedFraction, in: ctx, center: CGPoint(x: w / 2, y: h * 0.60), radius: 16)
         drawText(DiskSpaceMeter.formattedFree(reading.freeBytes), in: ctx, canvas: width, height: height,
-                  fontSize: 9, yOffset: CGFloat(height) * 0.30)
+                  fontSize: 9, yOffset: h * 0.16)
     }
 
     private static func drawMeterBar(fraction: Double, in ctx: CGContext, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {
