@@ -103,6 +103,9 @@ enum TileRenderer {
         if tile.liveContent == .clock {
             drawClockFace(in: ctx, canvas: size)
             return rgb565(from: ctx, width: size, height: size)
+        } else if tile.liveContent == .systemMeter {
+            drawSystemMeter(in: ctx, canvas: size)
+            return rgb565(from: ctx, width: size, height: size)
         }
 
         // Toggles that are ON use the alternate icon when set
@@ -155,6 +158,9 @@ enum TileRenderer {
 
         if knob.liveContent == .clock {
             drawCompactClockFace(in: ctx, width: w, height: h)
+            return rgb565(from: ctx, width: w, height: h)
+        } else if knob.liveContent == .systemMeter {
+            drawCompactSystemMeter(in: ctx, width: w, height: h)
             return rgb565(from: ctx, width: w, height: h)
         }
 
@@ -268,6 +274,47 @@ enum TileRenderer {
                  fontSize: 22, yOffset: CGFloat(canvas) * 0.42)
         drawText(clockDateFormatter.string(from: now), in: ctx, canvas: canvas,
                  fontSize: 12, yOffset: CGFloat(canvas) * 0.20)
+    }
+
+    /// Two labeled usage bars (CPU above RAM), sized for a 90x90 tile.
+    private static func drawSystemMeter(in ctx: CGContext, canvas: Int) {
+        let cpu = SystemMeter.cpuUsage()
+        let ram = SystemMeter.memoryUsage()
+        let s = CGFloat(canvas)
+        let barWidth = s - 24
+        let barX = (s - barWidth) / 2
+        let barHeight: CGFloat = 12
+
+        drawText("CPU \(Int(cpu * 100))%", in: ctx, canvas: canvas, fontSize: 11, yOffset: s * 0.62)
+        drawMeterBar(fraction: cpu, in: ctx, x: barX, y: s * 0.50, width: barWidth, height: barHeight)
+
+        drawText("RAM \(Int(ram * 100))%", in: ctx, canvas: canvas, fontSize: 11, yOffset: s * 0.28)
+        drawMeterBar(fraction: ram, in: ctx, x: barX, y: s * 0.16, width: barWidth, height: barHeight)
+    }
+
+    /// Compact text-only readout, sized for the 60-wide knob strip; a bar
+    /// doesn't have room to read as a bar at that width.
+    private static func drawCompactSystemMeter(in ctx: CGContext, width: Int, height: Int) {
+        let cpu = SystemMeter.cpuUsage()
+        let ram = SystemMeter.memoryUsage()
+        drawText("CPU \(Int(cpu * 100))%", in: ctx, canvas: width, height: height,
+                 fontSize: 10, yOffset: CGFloat(height) * 0.44)
+        drawText("RAM \(Int(ram * 100))%", in: ctx, canvas: width, height: height,
+                 fontSize: 10, yOffset: CGFloat(height) * 0.30)
+    }
+
+    private static func drawMeterBar(fraction: Double, in ctx: CGContext, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {
+        let clamped = max(0, min(1, fraction))
+        let track = CGRect(x: x, y: y, width: width, height: height)
+        ctx.setFillColor(CGColor(gray: 1, alpha: 0.15))
+        ctx.fill(track)
+        ctx.setFillColor(clamped > 0.85
+            ? CGColor(red: 0.95, green: 0.3, blue: 0.3, alpha: 1)
+            : CGColor(red: 0.3, green: 0.85, blue: 0.5, alpha: 1))
+        ctx.fill(CGRect(x: x, y: y, width: width * clamped, height: height))
+        ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.4))
+        ctx.setLineWidth(1)
+        ctx.stroke(track)
     }
 
     private static func drawFitted(_ image: CGImage, in ctx: CGContext, canvas: Int, inset: CGFloat) {

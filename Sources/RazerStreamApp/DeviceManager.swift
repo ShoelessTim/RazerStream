@@ -17,6 +17,7 @@ final class DeviceManager: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
+    private var systemMeterTask: Task<Void, Never>?
     private var idleCheckTask: Task<Void, Never>?
     private let appSwitchMonitor = AppSwitchMonitor()
     weak var store: ProfileStore?
@@ -54,6 +55,7 @@ final class DeviceManager: ObservableObject {
         self.store = store
         connectLoop()
         startLiveTileClock()
+        startSystemMeterClock()
         startIdleCheck()
         appSwitchMonitor.start(store: store, deviceManager: self)
     }
@@ -63,6 +65,7 @@ final class DeviceManager: ObservableObject {
         reconnectTask?.cancel()
         pushTask?.cancel()
         liveTileTask?.cancel()
+        systemMeterTask?.cancel()
         idleCheckTask?.cancel()
         appSwitchMonitor.stop()
         device?.close()
@@ -100,11 +103,13 @@ final class DeviceManager: ObservableObject {
         try? device.send(.setBrightness(store.activeProfile.brightness))
     }
 
-    // MARK: - Live tiles (self-updating content, e.g. the clock)
+    // MARK: - Live tiles (self-updating content: clock, CPU/RAM meter)
 
-    /// Redraws every clock tile on the current page once a minute, timed to
-    /// land right on the minute boundary so it changes exactly when a real
-    /// clock would.
+    /// Redraws every live tile and knob zone on the current page once a
+    /// minute, timed to land right on the minute boundary so the clock
+    /// changes exactly when a real clock would. Covers everything except
+    /// the meter, which needs a much faster cadence (see below) and would
+    /// otherwise sit stale for up to 59 seconds.
     private func startLiveTileClock() {
         liveTileTask?.cancel()
         liveTileTask = Task { [weak self] in
@@ -122,9 +127,36 @@ final class DeviceManager: ObservableObject {
 
     private func refreshLiveTiles() {
         guard connected, let store else { return }
-        let page = store.currentPage
+        let page = store.resolvedCurrentPage
         for (i, tile) in page.tiles.enumerated() where tile.liveContent != .none {
             pushTile(i)
+        }
+        for (i, knob) in page.knobs.enumerated() where knob.liveContent != .none {
+            pushKnobZone(i)
+        }
+    }
+
+    /// CPU/RAM only; every 2 seconds so the meter actually reads as live
+    /// instead of updating once a minute like the clock.
+    private func startSystemMeterClock() {
+        systemMeterTask?.cancel()
+        systemMeterTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                if Task.isCancelled { return }
+                self?.refreshSystemMeterTiles()
+            }
+        }
+    }
+
+    private func refreshSystemMeterTiles() {
+        guard connected, let store else { return }
+        let page = store.resolvedCurrentPage
+        for (i, tile) in page.tiles.enumerated() where tile.liveContent == .systemMeter {
+            pushTile(i)
+        }
+        for (i, knob) in page.knobs.enumerated() where knob.liveContent == .systemMeter {
+            pushKnobZone(i)
         }
     }
 
@@ -321,7 +353,8 @@ final class DeviceManager: ObservableObject {
         }
     }
 
-    /// Redraw a single tile (used when a toggle flips state).
+    /// Redraw a single tile (used when a toggle flips state, or a live tile
+    /// refreshes).
     private func pushTile(_ index: Int) {
         guard let device, let store else { return }
         let tile = store.currentPage.tiles[index]
@@ -329,6 +362,21 @@ final class DeviceManager: ObservableObject {
         try? device.send(.setButtonImage(
             button: index,
             rgb565: TileRenderer.render(tile, toggledOn: isOn)
+        ))
+    }
+
+    /// Redraw a single knob zone (used when a live knob refreshes). Reads
+    /// through resolvedCurrentPage, not currentPage, so a knob pinned
+    /// globally still shows the right content even though its config lives
+    /// outside the page struct.
+    private func pushKnobZone(_ index: Int) {
+        guard let device, let store, store.resolvedCurrentPage.knobs.indices.contains(index) else { return }
+        let knob = store.resolvedCurrentPage.knobs[index]
+        let x = index < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
+        let y = (index % 3) * 90
+        try? device.send(.setDisplayImage(
+            display: .center, x: x, y: y, w: 60, h: 90,
+            rgb565: TileRenderer.renderKnobZone(knob, index: index)
         ))
     }
 

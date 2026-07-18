@@ -813,9 +813,14 @@ struct TileInspector: View {
                 Picker("Content", selection: $liveContent) {
                     Text("Static").tag(LiveContent.none)
                     Text("Clock").tag(LiveContent.clock)
+                    Text("CPU / RAM").tag(LiveContent.systemMeter)
                 }
                 if liveContent == .clock {
                     Text("Shows the current time; updates on its own once a minute.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if liveContent == .systemMeter {
+                    Text("Shows CPU and memory usage; updates on its own every 2 seconds.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -941,9 +946,14 @@ struct KnobInspector: View {
                 Picker("Content", selection: $liveContent) {
                     Text("Static").tag(LiveContent.none)
                     Text("Clock").tag(LiveContent.clock)
+                    Text("CPU / RAM").tag(LiveContent.systemMeter)
                 }
                 if liveContent == .clock {
                     Text("Shows the current time; updates on its own once a minute.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if liveContent == .systemMeter {
+                    Text("Shows CPU and memory usage; updates on its own every 2 seconds.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {

@@ -63,11 +63,13 @@ enum ControlMode: Codable, Equatable {
 enum LiveContent: Codable, Equatable {
     case none
     case clock
+    case systemMeter
 
     var displayName: String {
         switch self {
-        case .none:  return "None"
-        case .clock: return "Clock"
+        case .none:        return "None"
+        case .clock:       return "Clock"
+        case .systemMeter: return "CPU / RAM"
         }
     }
 }
