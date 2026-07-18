@@ -813,6 +813,7 @@ struct TileInspector: View {
     @State private var imagePath = ""
     @State private var iconTint = false
     @State private var liveContent: LiveContent = .none
+    @State private var diskSpaceVolume = "/"
     @State private var action: ControlAction = .none
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
@@ -826,6 +827,7 @@ struct TileInspector: View {
                     Text("Static").tag(LiveContent.none)
                     Text("Clock").tag(LiveContent.clock)
                     Text("CPU / RAM").tag(LiveContent.systemMeter)
+                    Text("Disk Space").tag(LiveContent.diskSpace)
                 }
                 if liveContent == .clock {
                     Text("Shows the current time; updates on its own once a minute.")
@@ -833,6 +835,15 @@ struct TileInspector: View {
                         .foregroundStyle(.secondary)
                 } else if liveContent == .systemMeter {
                     Text("Shows CPU and memory usage; updates on its own every 2 seconds.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if liveContent == .diskSpace {
+                    Picker("Volume", selection: $diskSpaceVolume) {
+                        ForEach(DiskSpaceMeter.mountedVolumes(), id: \.path) { volume in
+                            Text(volume.name).tag(volume.path)
+                        }
+                    }
+                    Text("Shows free space on the chosen volume; updates on its own once a minute.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -903,6 +914,7 @@ struct TileInspector: View {
         imagePath = tile.imagePath ?? ""
         iconTint = tile.iconTint
         liveContent = tile.liveContent
+        diskSpaceVolume = tile.diskSpaceVolume
         action = tile.action
         releaseAction = tile.releaseAction
         mode = tile.mode
@@ -918,6 +930,7 @@ struct TileInspector: View {
                 imagePath: imagePath.isEmpty ? nil : imagePath,
                 iconTint: iconTint,
                 liveContent: liveContent,
+                diskSpaceVolume: diskSpaceVolume,
                 action: action,
                 releaseAction: releaseAction,
                 mode: mode
@@ -939,6 +952,7 @@ struct KnobInspector: View {
     @State private var imagePath = ""
     @State private var iconTint = false
     @State private var liveContent: LiveContent = .none
+    @State private var diskSpaceVolume = "/"
     @State private var clockwise: ControlAction = .none
     @State private var counterClockwise: ControlAction = .none
     @State private var press: ControlAction = .none
@@ -959,6 +973,7 @@ struct KnobInspector: View {
                     Text("Static").tag(LiveContent.none)
                     Text("Clock").tag(LiveContent.clock)
                     Text("CPU / RAM").tag(LiveContent.systemMeter)
+                    Text("Disk Space").tag(LiveContent.diskSpace)
                 }
                 if liveContent == .clock {
                     Text("Shows the current time; updates on its own once a minute.")
@@ -966,6 +981,15 @@ struct KnobInspector: View {
                         .foregroundStyle(.secondary)
                 } else if liveContent == .systemMeter {
                     Text("Shows CPU and memory usage; updates on its own every 2 seconds.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if liveContent == .diskSpace {
+                    Picker("Volume", selection: $diskSpaceVolume) {
+                        ForEach(DiskSpaceMeter.mountedVolumes(), id: \.path) { volume in
+                            Text(volume.name).tag(volume.path)
+                        }
+                    }
+                    Text("Shows free space on the chosen volume; updates on its own once a minute.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -1049,6 +1073,7 @@ struct KnobInspector: View {
         imagePath = knob.imagePath ?? ""
         iconTint = knob.iconTint
         liveContent = knob.liveContent
+        diskSpaceVolume = knob.diskSpaceVolume
         clockwise = knob.clockwise
         counterClockwise = knob.counterClockwise
         press = knob.press
@@ -1065,6 +1090,7 @@ struct KnobInspector: View {
             imagePath: imagePath.isEmpty ? nil : imagePath,
             iconTint: iconTint,
             liveContent: liveContent,
+            diskSpaceVolume: diskSpaceVolume,
             clockwise: clockwise,
             counterClockwise: counterClockwise,
             press: press

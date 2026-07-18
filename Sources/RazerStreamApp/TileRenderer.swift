@@ -106,6 +106,9 @@ enum TileRenderer {
         } else if tile.liveContent == .systemMeter {
             drawSystemMeter(in: ctx, canvas: size)
             return rgb565(from: ctx, width: size, height: size)
+        } else if tile.liveContent == .diskSpace {
+            drawDiskSpace(in: ctx, canvas: size, volumePath: tile.diskSpaceVolume)
+            return rgb565(from: ctx, width: size, height: size)
         }
 
         // Toggles that are ON use the alternate icon when set
@@ -161,6 +164,9 @@ enum TileRenderer {
             return rgb565(from: ctx, width: w, height: h)
         } else if knob.liveContent == .systemMeter {
             drawCompactSystemMeter(in: ctx, width: w, height: h)
+            return rgb565(from: ctx, width: w, height: h)
+        } else if knob.liveContent == .diskSpace {
+            drawCompactDiskSpace(in: ctx, width: w, height: h, volumePath: knob.diskSpaceVolume)
             return rgb565(from: ctx, width: w, height: h)
         }
 
@@ -301,6 +307,37 @@ enum TileRenderer {
                  fontSize: 10, yOffset: CGFloat(height) * 0.44)
         drawText("RAM \(Int(ram * 100))%", in: ctx, canvas: width, height: height,
                  fontSize: 10, yOffset: CGFloat(height) * 0.30)
+    }
+
+    /// A single usage bar (fills with how much is USED, so it reads red
+    /// when space is running low, same danger convention as the CPU/RAM
+    /// bars) plus the actual free amount as text, since "how much is free"
+    /// is what was actually asked for, not just a percentage.
+    private static func drawDiskSpace(in ctx: CGContext, canvas: Int, volumePath: String) {
+        let s = CGFloat(canvas)
+        guard let reading = DiskSpaceMeter.reading(forVolumeAt: volumePath) else {
+            drawText("No Data", in: ctx, canvas: canvas, fontSize: 12, yOffset: nil)
+            return
+        }
+        let barWidth = s - 24
+        let barX = (s - barWidth) / 2
+
+        drawText("DISK", in: ctx, canvas: canvas, fontSize: 11, yOffset: s * 0.62)
+        drawMeterBar(fraction: reading.usedFraction, in: ctx, x: barX, y: s * 0.50, width: barWidth, height: 12)
+        drawText(DiskSpaceMeter.formattedFree(reading.freeBytes), in: ctx, canvas: canvas,
+                  fontSize: 11, yOffset: s * 0.28)
+    }
+
+    /// Compact text-only readout, sized for the 60-wide knob strip.
+    private static func drawCompactDiskSpace(in ctx: CGContext, width: Int, height: Int, volumePath: String) {
+        guard let reading = DiskSpaceMeter.reading(forVolumeAt: volumePath) else {
+            drawText("No Data", in: ctx, canvas: width, height: height, fontSize: 10, yOffset: nil)
+            return
+        }
+        drawText("DISK", in: ctx, canvas: width, height: height,
+                  fontSize: 10, yOffset: CGFloat(height) * 0.44)
+        drawText(DiskSpaceMeter.formattedFree(reading.freeBytes), in: ctx, canvas: width, height: height,
+                  fontSize: 9, yOffset: CGFloat(height) * 0.30)
     }
 
     private static func drawMeterBar(fraction: Double, in ctx: CGContext, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {

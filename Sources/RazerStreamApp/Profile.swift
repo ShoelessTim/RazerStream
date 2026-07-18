@@ -72,12 +72,14 @@ enum LiveContent: Codable, Equatable {
     case none
     case clock
     case systemMeter
+    case diskSpace     // free space on a chosen volume; see *.diskSpaceVolume
 
     var displayName: String {
         switch self {
         case .none:        return "None"
         case .clock:       return "Clock"
         case .systemMeter: return "CPU / RAM"
+        case .diskSpace:   return "Disk Space"
         }
     }
 }
@@ -92,13 +94,14 @@ struct TileConfig: Codable, Equatable {
     var imagePath: String? = nil      // custom image file (overrides symbol)
     var iconTint: Bool = false        // tint the image white; for mono pack SVGs
     var liveContent: LiveContent = .none   // self-updating content; overrides label/icon
+    var diskSpaceVolume: String = "/"      // which mounted volume, when liveContent == .diskSpace
     var action: ControlAction = .none
     var releaseAction: ControlAction = .none   // toggle-off / momentary-release
     var mode: ControlMode = .tap
 
     init(label: String = "", colorHex: String = "333333", sfSymbol: String? = nil,
          altSymbol: String? = nil, imagePath: String? = nil, iconTint: Bool = false,
-         liveContent: LiveContent = .none,
+         liveContent: LiveContent = .none, diskSpaceVolume: String = "/",
          action: ControlAction = .none, releaseAction: ControlAction = .none,
          mode: ControlMode = .tap) {
         self.label = label
@@ -108,6 +111,7 @@ struct TileConfig: Codable, Equatable {
         self.imagePath = imagePath
         self.iconTint = iconTint
         self.liveContent = liveContent
+        self.diskSpaceVolume = diskSpaceVolume
         self.action = action
         self.releaseAction = releaseAction
         self.mode = mode
@@ -123,6 +127,7 @@ struct TileConfig: Codable, Equatable {
         imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
         iconTint = try c.decodeIfPresent(Bool.self, forKey: .iconTint) ?? false
         liveContent = try c.decodeIfPresent(LiveContent.self, forKey: .liveContent) ?? .none
+        diskSpaceVolume = try c.decodeIfPresent(String.self, forKey: .diskSpaceVolume) ?? "/"
         action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
         releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
         mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap
@@ -135,12 +140,13 @@ struct KnobConfig: Codable, Equatable {
     var imagePath: String? = nil      // custom image file (overrides symbol)
     var iconTint: Bool = false        // tint the image white; for mono pack SVGs
     var liveContent: LiveContent = .none   // self-updating content; overrides label/icon
+    var diskSpaceVolume: String = "/"      // which mounted volume, when liveContent == .diskSpace
     var clockwise: ControlAction = .none
     var counterClockwise: ControlAction = .none
     var press: ControlAction = .none
 
     init(label: String = "", sfSymbol: String? = nil, imagePath: String? = nil,
-         iconTint: Bool = false, liveContent: LiveContent = .none,
+         iconTint: Bool = false, liveContent: LiveContent = .none, diskSpaceVolume: String = "/",
          clockwise: ControlAction = .none, counterClockwise: ControlAction = .none,
          press: ControlAction = .none) {
         self.label = label
@@ -148,6 +154,7 @@ struct KnobConfig: Codable, Equatable {
         self.imagePath = imagePath
         self.iconTint = iconTint
         self.liveContent = liveContent
+        self.diskSpaceVolume = diskSpaceVolume
         self.clockwise = clockwise
         self.counterClockwise = counterClockwise
         self.press = press
@@ -161,6 +168,7 @@ struct KnobConfig: Codable, Equatable {
         imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
         iconTint = try c.decodeIfPresent(Bool.self, forKey: .iconTint) ?? false
         liveContent = try c.decodeIfPresent(LiveContent.self, forKey: .liveContent) ?? .none
+        diskSpaceVolume = try c.decodeIfPresent(String.self, forKey: .diskSpaceVolume) ?? "/"
         clockwise = try c.decodeIfPresent(ControlAction.self, forKey: .clockwise) ?? .none
         counterClockwise = try c.decodeIfPresent(ControlAction.self, forKey: .counterClockwise) ?? .none
         press = try c.decodeIfPresent(ControlAction.self, forKey: .press) ?? .none
