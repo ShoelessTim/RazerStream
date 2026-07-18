@@ -122,7 +122,7 @@ enum TileRenderer {
                     .cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     drawFitted(cgImage, in: ctx, canvas: size, inset: 18)
                 }
-            } else if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            } else if let cgImage = normalizedImage(nsImage).cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 drawFitted(cgImage, in: ctx, canvas: size, inset: 0)
             }
         } else if let symbol = effectiveSymbol,
@@ -182,7 +182,7 @@ enum TileRenderer {
             if knob.iconTint {
                 iconImage = tintedWhite(nsImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
             } else {
-                iconImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                iconImage = normalizedImage(nsImage).cgImage(forProposedRect: nil, context: nil, hints: nil)
             }
         } else if let symbol = knob.sfSymbol {
             iconImage = symbolImage(symbol, pointSize: 26)
@@ -231,17 +231,38 @@ enum TileRenderer {
         )
     }
 
-    /// Recolors a mono image (like a stroke SVG icon) to solid white,
-    /// preserving its alpha. Rasterizes at high resolution so small vector
-    /// icons (Lucide is 24x24) stay crisp when scaled onto a tile.
-    private static func tintedWhite(_ image: NSImage) -> NSImage? {
+    /// Re-rasterizes any loaded image (PNG or SVG) into a fixed 256pt
+    /// canvas, preserving aspect ratio. Needed before any fit-to-size math
+    /// runs: `NSImage(contentsOfFile:)` on an SVG with only a `viewBox`
+    /// (no explicit `width`/`height` attributes) can resolve `.size` to an
+    /// AppKit-internal default far larger than the actual artwork, and
+    /// `cgImage(forProposedRect: nil, ...)` then hands back a CGImage at
+    /// that inflated size. `drawFitted`/the knob icon scale both trust the
+    /// CGImage's raw width/height, so an inflated size makes the icon
+    /// render far smaller than intended, worse on knobs (smaller target
+    /// size) than tiles — exactly the reported symptom, and one that never
+    /// hits PNGs, since a PNG's pixel size is never ambiguous. Rasterizing
+    /// here first pins every image to the same known, correct target size
+    /// before that math ever runs.
+    private static func normalizedImage(_ image: NSImage) -> NSImage {
         let target: CGFloat = 256
         let aspect = image.size.height > 0 ? image.size.width / image.size.height : 1
         let size = aspect >= 1
             ? NSSize(width: target, height: target / aspect)
             : NSSize(width: target * aspect, height: target)
-        let out = NSImage(size: size, flipped: false) { rect in
+        return NSImage(size: size, flipped: false) { rect in
             image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            return true
+        }
+    }
+
+    /// Recolors a mono image (like a stroke SVG icon) to solid white,
+    /// preserving its alpha. Rasterizes at high resolution so small vector
+    /// icons (Lucide is 24x24) stay crisp when scaled onto a tile.
+    private static func tintedWhite(_ image: NSImage) -> NSImage? {
+        let normalized = normalizedImage(image)
+        let out = NSImage(size: normalized.size, flipped: false) { rect in
+            normalized.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
             NSColor.white.set()
             rect.fill(using: .sourceAtop)
             return true
