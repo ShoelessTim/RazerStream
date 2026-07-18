@@ -87,6 +87,13 @@ public final class SerialTransport {
             Darwin.close(cfgFD)
             throw error
         }
+        // Discard anything still sitting in the kernel's serial buffers from
+        // before this session opened the port. On a warm reconnect (app
+        // relaunched, device never unplugged) stale bytes can otherwise be
+        // there waiting, and get fed straight into the handshake/frame
+        // parser as soon as reading starts, confusing it into thinking the
+        // handshake failed or a frame is malformed.
+        tcflush(cfgFD, TCIOFLUSH)
         // Assert DTR + RTS so the device knows a host is listening
         var modemBits: Int32 = TIOCM_DTR | TIOCM_RTS
         _ = ioctl(cfgFD, TIOCMBIS, &modemBits)
