@@ -340,6 +340,11 @@ private struct PageAccessoryBar: NSViewRepresentable {
         Coordinator(onAdd: onAdd, onDelete: onDelete)
     }
 
+    // AppKit always delivers target/action on the main thread; mark the
+    // coordinator MainActor so reading selectedSegment (MainActor-isolated
+    // on current SDKs) and calling the SwiftUI closures is legal under
+    // strict concurrency (CI: Xcode 16.4 / macOS 15 SDK).
+    @MainActor
     final class Coordinator: NSObject {
         var onAdd: () -> Void
         var onDelete: () -> Void
