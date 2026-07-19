@@ -1,7 +1,7 @@
 # RazerStream software brief
 
 Written as a standalone reference for planning v2 and beyond; accurate as of
-tag v1.4.72 on the main branch of github.com/ShoelessTim/RazerStream.
+tag v1.4.73 on the main branch of github.com/ShoelessTim/RazerStream.
 
 ## What it is
 
@@ -94,12 +94,13 @@ tile grid starts at x=60. Control ids: 1 to 6 are knob presses (left column
 top to bottom, then right), 7 to 14 are the physical buttons left to right;
 button id 7's LED is the device status light and must never be written.
 
-## What is shipped and working (v1.4.72)
+## What is shipped and working (v1.4.73)
 
-v1.4.72 is a tidy stabilization of the 1.4.7 line: the LED-brightness work
+v1.4.73 is a tidy stabilization of the 1.4.7 line: the LED-brightness work
 and live-tile additions from that morning, plus a reliable page add/delete
-control in the sidebar. Intermediate version bumps (1.4.3 through 1.4.9)
-were never the public release story; this is.
+control in the sidebar (1.4.72) and a MainActor concurrency fix so the tree
+builds under Xcode 16.4 CI (1.4.73). Intermediate version bumps (1.4.3
+through 1.4.9) were never the public release story; this is.
 
 - Full input: all tiles, knobs (turn and press), buttons, touchscreen
 - Full output: tile images (SF Symbols, bundled/user icon packs, custom
