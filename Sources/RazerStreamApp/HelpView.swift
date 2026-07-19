@@ -55,7 +55,8 @@ struct HelpView: View {
                     labeled("Open App", "launches any application.")
                     labeled("Shell Command", "runs a zsh one-liner.")
                     labeled("AppleScript", "runs a script; volume actions use this under the hood.")
-                    labeled("Keystroke", "click the recorder, press the real keys, done.")
+                    labeled("Keystroke", "click the recorder, press the real keys, done; one chord per step (⌘⇧K), not a long typing stream.")
+                    labeled("Macro", "several actions in order, with an optional wait after each step; use this for multi-keystroke sequences (⌘C, wait, ⌘V) or open-app-then-keys. Empty steps are skipped.")
                     labeled("Media keys", "Play / Pause, Next Track, Previous Track; these control Music, Spotify, browsers, anything that answers the keyboard media keys.")
                     labeled("Volume", "up, down, and mute toggle.")
                 }

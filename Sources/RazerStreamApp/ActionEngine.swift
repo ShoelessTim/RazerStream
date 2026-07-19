@@ -21,11 +21,134 @@ enum ActionEngine {
     static func perform(
         _ action: ControlAction,
         amount: Int = 1,
-        pageHandler: (PageNav) -> Void = { _ in },
-        deviceHandler: (DeviceAdjustment, Int) -> Void = { _, _ in }
+        pageHandler: @escaping (PageNav) -> Void = { _ in },
+        deviceHandler: @escaping (DeviceAdjustment, Int) -> Void = { _, _ in }
     ) {
         switch action {
-        case .none:
+        case .sequence(let steps):
+            // Scheduled on the main queue so AppKit work and the DeviceManager
+            // handlers stay on the same thread they already use. Delays use
+            // asyncAfter rather than Task/await to avoid Swift 6 sending
+            // diagnostics on non-Sendable handler closures from @MainActor.
+            runSequence(
+                steps,
+                amount: amount,
+                pageHandler: pageHandler,
+                deviceHandler: deviceHandler
+            )
+
+        default:
+            performImmediate(
+                action,
+                amount: amount,
+                pageHandler: pageHandler,
+                deviceHandler: deviceHandler
+            )
+        }
+    }
+
+    /// Holds page/device handlers across delayed main-queue hops. Always
+    /// invoked on the main queue (same as DeviceManager), so @unchecked
+    /// Sendable is the honest escape hatch Swift 6 needs for non-Sendable
+    /// escaping closures scheduled with DispatchQueue.main.asyncAfter.
+    private final class MacroContext: @unchecked Sendable {
+        let amount: Int
+        let pageHandler: (PageNav) -> Void
+        let deviceHandler: (DeviceAdjustment, Int) -> Void
+        let steps: [MacroStep]
+
+        init(
+            steps: [MacroStep],
+            amount: Int,
+            pageHandler: @escaping (PageNav) -> Void,
+            deviceHandler: @escaping (DeviceAdjustment, Int) -> Void
+        ) {
+            self.steps = steps
+            self.amount = amount
+            self.pageHandler = pageHandler
+            self.deviceHandler = deviceHandler
+        }
+    }
+
+    /// Runs macro steps in order with their delays. Nested `.sequence` steps
+    /// are flattened so a malformed profile cannot recurse forever. Failures
+    /// in individual steps are logged by the leaf handlers and the rest of
+    /// the macro continues (v1 policy: keep going).
+    private static func runSequence(
+        _ steps: [MacroStep],
+        amount: Int,
+        pageHandler: @escaping (PageNav) -> Void,
+        deviceHandler: @escaping (DeviceAdjustment, Int) -> Void
+    ) {
+        let flat = flattenSteps(steps)
+        guard !flat.isEmpty else { return }
+        let context = MacroContext(
+            steps: flat,
+            amount: amount,
+            pageHandler: pageHandler,
+            deviceHandler: deviceHandler
+        )
+        scheduleStep(index: 0, context: context)
+    }
+
+    private static func scheduleStep(index: Int, context: MacroContext) {
+        let work = {
+            guard index < context.steps.count else { return }
+            let step = context.steps[index]
+            performImmediate(
+                step.action,
+                amount: context.amount,
+                pageHandler: context.pageHandler,
+                deviceHandler: context.deviceHandler
+            )
+            let next = index + 1
+            guard next < context.steps.count else { return }
+            let delay = TimeInterval(step.delayAfterMs) / 1000.0
+            if delay > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    scheduleStep(index: next, context: context)
+                }
+            } else {
+                // Bounce to the next runloop turn so a long chain of
+                // zero-delay steps cannot starve input handling.
+                DispatchQueue.main.async {
+                    scheduleStep(index: next, context: context)
+                }
+            }
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
+
+    /// Expands nested sequences into a single ordered list of leaf steps.
+    private static func flattenSteps(_ steps: [MacroStep]) -> [MacroStep] {
+        var out: [MacroStep] = []
+        for step in steps {
+            if case .sequence(let nested) = step.action {
+                out.append(contentsOf: flattenSteps(nested))
+            } else if case .none = step.action {
+                // Skip empty steps so a half-edited macro doesn't pause on blanks.
+                continue
+            } else {
+                out.append(step)
+            }
+        }
+        return out
+    }
+
+    /// Single non-sequence action. Callers that need macros use `perform`.
+    private static func performImmediate(
+        _ action: ControlAction,
+        amount: Int,
+        pageHandler: (PageNav) -> Void,
+        deviceHandler: (DeviceAdjustment, Int) -> Void
+    ) {
+        switch action {
+        case .none, .sequence:
+            // .sequence should never reach here; flatten/perform routes it.
             break
 
         case .launchApp(let path):

@@ -635,6 +635,10 @@ extension ContentView {
 struct ActionEditor: View {
     let title: String
     @Binding var action: ControlAction
+    /// When false, Macro is hidden from the kind picker so step editors
+    /// cannot nest sequences (the engine would flatten them, but the UI
+    /// would be confusing). Top-level tile/knob/button editors leave this true.
+    var allowsMacro: Bool = true
     @EnvironmentObject var store: ProfileStore
 
     enum Kind: String, CaseIterable {
@@ -644,6 +648,7 @@ struct ActionEditor: View {
         case shell = "Shell Command"
         case script = "AppleScript"
         case keystroke = "Keystroke"
+        case macro = "Macro (multi-step)"
         case mediaPlayPause = "Play / Pause"
         case mediaNext = "Next Track"
         case mediaPrevious = "Previous Track"
@@ -665,15 +670,25 @@ struct ActionEditor: View {
     @State private var kind: Kind = .none
     @State private var param: String = ""
     @State private var pageIndex: Int = 0
+    @State private var macroSteps: [MacroStep] = []
+
+    private var availableKinds: [Kind] {
+        allowsMacro ? Kind.allCases : Kind.allCases.filter { $0 != .macro }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Picker("", selection: $kind) {
-                ForEach(Kind.allCases, id: \.self) { Text($0.rawValue) }
+                ForEach(availableKinds, id: \.self) { Text($0.rawValue) }
             }
             .labelsHidden()
-            .onChange(of: kind) { syncOut() }
+            .onChange(of: kind) { _, newKind in
+                if newKind == .macro, macroSteps.isEmpty {
+                    macroSteps = [MacroStep()]
+                }
+                syncOut()
+            }
 
             switch kind {
             case .launchApp:
@@ -699,6 +714,9 @@ struct ActionEditor: View {
             case .keystroke:
                 KeystrokeRecorder(combo: $param)
                     .onChange(of: param) { syncOut() }
+            case .macro:
+                MacroEditor(steps: $macroSteps)
+                    .onChange(of: macroSteps) { syncOut() }
             case .gotoPage:
                 Picker("", selection: $pageIndex) {
                     ForEach(0..<store.activeProfile.pages.count, id: \.self) { i in
@@ -723,6 +741,16 @@ struct ActionEditor: View {
         case .shellCommand(let c): kind = .shell;      param = c
         case .appleScript(let s):  kind = .script;     param = s
         case .keystroke(let k):    kind = .keystroke;  param = k
+        case .sequence(let steps):
+            // Step-level editors never show Macro; if a nested sequence slips
+            // in via import, surface it as empty rather than recurse the UI.
+            if allowsMacro {
+                kind = .macro
+                macroSteps = steps.isEmpty ? [MacroStep()] : steps
+            } else {
+                kind = .none
+                param = ""
+            }
         case .mediaPlayPause:      kind = .mediaPlayPause
         case .mediaNext:           kind = .mediaNext
         case .mediaPrevious:       kind = .mediaPrevious
@@ -750,6 +778,7 @@ struct ActionEditor: View {
         case .shell:      action = .shellCommand(param)
         case .script:     action = .appleScript(param)
         case .keystroke:  action = .keystroke(param)
+        case .macro:      action = .sequence(macroSteps)
         case .mediaPlayPause: action = .mediaPlayPause
         case .mediaNext:      action = .mediaNext
         case .mediaPrevious:  action = .mediaPrevious
@@ -767,6 +796,99 @@ struct ActionEditor: View {
         case .prevPage:   action = .prevPage
         case .showApp:    action = .showApp
         }
+    }
+}
+
+// MARK: - Macro (multi-step) editor
+
+/// Ordered list of leaf actions plus a post-step delay. Used when the parent
+/// ActionEditor kind is Macro; each step's ActionEditor has allowsMacro false.
+struct MacroEditor: View {
+    @Binding var steps: [MacroStep]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Steps run top to bottom. Delay is after that step, before the next; multi-keystroke macros usually want 50 to 100 ms between chords.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(Array(steps.enumerated()), id: \.element.id) { index, _ in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Step \(index + 1)")
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        if steps.count > 1 {
+                            Button(role: .destructive) {
+                                steps.remove(at: index)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove step")
+                        }
+                    }
+                    ActionEditor(
+                        title: "Action",
+                        action: stepActionBinding(at: index),
+                        allowsMacro: false
+                    )
+                    if index < steps.count - 1 {
+                        HStack {
+                            Text("Then wait")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            TextField(
+                                "",
+                                value: stepDelayBinding(at: index),
+                                format: .number
+                            )
+                            .frame(width: 56)
+                            Text("ms")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.08)))
+            }
+
+            Button {
+                steps.append(MacroStep())
+            } label: {
+                Label("Add Step", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private func stepActionBinding(at index: Int) -> Binding<ControlAction> {
+        Binding(
+            get: {
+                guard steps.indices.contains(index) else { return .none }
+                return steps[index].action
+            },
+            set: { newValue in
+                guard steps.indices.contains(index) else { return }
+                steps[index].action = newValue
+            }
+        )
+    }
+
+    private func stepDelayBinding(at index: Int) -> Binding<UInt16> {
+        Binding(
+            get: {
+                guard steps.indices.contains(index) else { return 100 }
+                return steps[index].delayAfterMs
+            },
+            set: { newValue in
+                guard steps.indices.contains(index) else { return }
+                steps[index].delayAfterMs = min(newValue, 60_000)
+            }
+        )
     }
 }
 

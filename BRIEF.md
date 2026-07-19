@@ -110,7 +110,8 @@ through 1.4.9) were never the public release story; this is.
   momentary, shift (hold to reveal another page)
 - Actions: app launch, URL, shell, AppleScript, recorded keystrokes, media
   keys (native volume HUD), screen brightness, button LED brightness, page
-  navigation, show app window
+  navigation, show app window, and multi-step macros (sequence of leaf
+  actions with per-step delay)
 - Knob rotation presets (Volume, Screen Brightness, Button LED Brightness,
   Screen + LED Brightness, Page Navigation, Track) as single choices with a
   shared handedness setting; fast turns accelerate the step. Brightness knobs

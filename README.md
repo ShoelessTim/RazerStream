@@ -26,7 +26,8 @@ Not affiliated with Razer, Loupedeck, or Logitech.
   momentary (hold), and shift (hold to reveal another page)
 - Actions: open app, open URL, shell command, AppleScript, recorded keystroke,
   media keys, volume with the native on-screen HUD, screen brightness, button
-  LED brightness, page navigation, and show the app window
+  LED brightness, page navigation, show the app window, and **macros** (ordered
+  multi-step sequences with optional delays between steps)
 - Knob rotation presets: Volume, Screen Brightness, Button LED Brightness,
   Screen + LED Brightness, Page Navigation, and Track skip are each a single
   choice instead of hand-wiring clockwise and counterclockwise separately,

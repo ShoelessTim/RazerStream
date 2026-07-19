@@ -2,6 +2,37 @@ import Foundation
 
 // MARK: - Actions a control can trigger
 
+/// One step in a multi-action macro. Runs `action`, then waits `delayAfterMs`
+/// before the next step (the wait after the last step is ignored). Nested
+/// `.sequence` actions are flattened at play time; the editor never offers
+/// Macro as a step type, so users cannot build trees by accident.
+struct MacroStep: Codable, Equatable, Identifiable {
+    var id: UUID
+    var action: ControlAction
+    /// Milliseconds to wait after this step before the next one. 0 means
+    /// fire the next step immediately. A small value (50 to 100) is typical
+    /// between keystrokes so the frontmost app can process each chord.
+    var delayAfterMs: UInt16
+
+    init(id: UUID = UUID(), action: ControlAction = .none, delayAfterMs: UInt16 = 100) {
+        self.id = id
+        self.action = action
+        self.delayAfterMs = delayAfterMs
+    }
+
+    // Older encodings won't have id; generate one on load so ForEach works.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        action = try c.decodeIfPresent(ControlAction.self, forKey: .action) ?? .none
+        delayAfterMs = try c.decodeIfPresent(UInt16.self, forKey: .delayAfterMs) ?? 100
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, action, delayAfterMs
+    }
+}
+
 enum ControlAction: Codable, Equatable {
     case none
     case launchApp(path: String)
@@ -25,6 +56,10 @@ enum ControlAction: Codable, Equatable {
     case nextPage
     case prevPage
     case showApp                      // bring RazerStream front and center
+    /// Ordered multi-action macro: each step is any non-macro ControlAction
+    /// plus an optional delay after it. First real general "one control does
+    /// many things" path (Screen + LED Brightness was a dedicated special case).
+    case sequence([MacroStep])
 
     var displayName: String {
         switch self {
@@ -50,7 +85,16 @@ enum ControlAction: Codable, Equatable {
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"
         case .showApp:              return "Show RazerStream"
+        case .sequence(let steps):
+            let n = steps.count
+            return n == 1 ? "Macro (1 step)" : "Macro (\(n) steps)"
         }
+    }
+
+    /// True when this is a multi-step macro (possibly empty).
+    var isSequence: Bool {
+        if case .sequence = self { return true }
+        return false
     }
 }
 

@@ -132,7 +132,10 @@ forks and sends pull requests; nothing about his workflow changes.
    touched by this app at all regardless of idle state, so it stays lit at
    its own device-managed brightness as a constant connection indicator.
 9. Webhooks and Home Assistant/MQTT actions
-10. Plugin API: action providers as separate processes or scripts. Concrete
+10. [x] Multi-action macros: `ControlAction.sequence([MacroStep])` with
+    per-step delay; action picker kind Macro; nested sequences flattened
+    at play time; empty steps skipped (shipped after v1.4.73)
+11. Plugin API: action providers as separate processes or scripts. Concrete
     requirements from a real use case (r/loupedeck, u/Cuica, 2026-07-16; a
     Jellyfin media-player controller, migrating off a custom Loupedeck C#
     plugin):
@@ -217,12 +220,12 @@ forks and sends pull requests; nothing about his workflow changes.
      1.4.7 line; still wants confirmation on the reporter's macOS version
      (26.5.2) since this dev machine could not reproduce the original size
      resolution failure. Open for the next bug-fix pass if still reported.
-   - Multi-action macros: fire a sequence of ControlActions from one tap,
-     not just a single action. Called out as "a must" to be a viable
-     Loupedeck replacement. Real scope decision needed: a new
-     `.sequence([ControlAction])` case is the obvious shape, but delays
-     between steps, and what happens if one step fails, need actual design
-     thought before building.
+   - [x] Multi-action macros (shipped after v1.4.73): `ControlAction.sequence`
+     of `MacroStep` (leaf action + delayAfterMs). Editor is Macro in the
+     action picker; steps reuse the same action editor with nesting blocked.
+     Playback flattens any nested sequences, skips `.none` steps, keeps going
+     on leaf failures, and runs delays off the device event pump via Task.
+     Not a full keyboard stream recorder; multi-chord is N keystroke steps.
    - Default/application profiles with their own pages, replacing
      page-switching as the way "mapped apps" work: instead of one profile
      with app-switching mapping bundle IDs to pages within it, each app
