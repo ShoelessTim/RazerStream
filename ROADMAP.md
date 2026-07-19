@@ -174,11 +174,11 @@ forks and sends pull requests; nothing about his workflow changes.
    from the dead app.
 3. From a v1.4.0 installer, filed as GitHub issues plus direct feedback
    (2026-07-18):
-   - More knob rotation presets: mouse vertical/horizontal scroll, and a
-     click action for knob press specifically tied to scrolling (distinct
-     from the general-purpose press action that already exists). Would
-     slot into the same KnobRotationMode picker as Volume/Brightness/Page
-     Nav/Track.
+   - [x] Mouse scroll knob presets (shipped after 1.5.1): vertical and
+     horizontal scroll as KnobRotationMode entries, plus Scroll Up/Down/
+     Left/Right and Mouse Click as assignable actions (press a scroll knob
+     to click). CGEvent line scroll; respects knob acceleration and the
+     global handedness setting.
    - [x] LED button brightness as a knob rotation preset, shipped v1.4.3:
      Profile gained a persistent `ledBrightness` level (0...10, same
      convention as screen brightness), a new Button LED Brightness entry

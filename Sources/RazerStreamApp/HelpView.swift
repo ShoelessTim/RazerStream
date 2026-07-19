@@ -59,10 +59,11 @@ struct HelpView: View {
                     labeled("Macro", "several actions in order, with an optional wait after each step; use this for multi-keystroke sequences (⌘C, wait, ⌘V) or open-app-then-keys. Empty steps are skipped.")
                     labeled("Media keys", "Play / Pause, Next Track, Previous Track; these control Music, Spotify, browsers, anything that answers the keyboard media keys.")
                     labeled("Volume", "up, down, and mute toggle.")
+                    labeled("Mouse scroll", "knob Rotation presets for vertical or horizontal scroll; also Scroll Up/Down/Left/Right and Mouse Click as plain actions. Fast turns scroll further. Needs Accessibility.")
                 }
 
                 section("Permissions", icon: "lock.shield") {
-                    bullet("Keystrokes and media keys need the macOS Accessibility permission.")
+                    bullet("Keystrokes, media keys, and mouse scroll/click need the macOS Accessibility permission.")
                     bullet("When it's missing, an orange chip appears in the status bar; click it to open the right Settings pane.")
                     important("After updating the app you may need to re-grant: in System Settings, Privacy and Security, Accessibility, remove RazerStream with the minus button, then re-add it from /Applications. This is a macOS rule about app signatures, not a bug.")
                 }

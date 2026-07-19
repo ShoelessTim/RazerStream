@@ -52,6 +52,11 @@ enum ControlAction: Codable, Equatable {
     case ledBrightnessDown
     case bothBrightnessUp             // steps screen and button LED brightness together
     case bothBrightnessDown
+    case mouseScrollUp                // CGEvent scroll; needs Accessibility
+    case mouseScrollDown
+    case mouseScrollLeft
+    case mouseScrollRight
+    case mouseClick                   // left click at the current cursor position
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
@@ -81,6 +86,11 @@ enum ControlAction: Codable, Equatable {
         case .ledBrightnessDown:    return "Button LED Brightness −"
         case .bothBrightnessUp:     return "Brightness (Screen + LEDs) +"
         case .bothBrightnessDown:   return "Brightness (Screen + LEDs) −"
+        case .mouseScrollUp:        return "Scroll Up"
+        case .mouseScrollDown:      return "Scroll Down"
+        case .mouseScrollLeft:      return "Scroll Left"
+        case .mouseScrollRight:     return "Scroll Right"
+        case .mouseClick:           return "Mouse Click"
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"

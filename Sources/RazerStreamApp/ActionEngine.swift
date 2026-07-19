@@ -196,6 +196,17 @@ enum ActionEngine {
             if hasAccessibility { sendMediaKey(7) }   // NX_KEYTYPE_MUTE
             else { runAppleScript("set volume output muted (not (output muted of (get volume settings)))") }
 
+        case .mouseScrollUp:
+            sendScroll(vertical: Int32(amount), horizontal: 0)
+        case .mouseScrollDown:
+            sendScroll(vertical: -Int32(amount), horizontal: 0)
+        case .mouseScrollLeft:
+            sendScroll(vertical: 0, horizontal: -Int32(amount))
+        case .mouseScrollRight:
+            sendScroll(vertical: 0, horizontal: Int32(amount))
+        case .mouseClick:
+            sendMouseClick()
+
         case .gotoPage(let p): pageHandler(.goto(p))
         case .nextPage:        pageHandler(.next)
         case .prevPage:        pageHandler(.prev)
@@ -289,6 +300,52 @@ enum ActionEngine {
         }
         post(down: true)
         post(down: false)
+    }
+
+    /// Posts a scroll-wheel event. Positive `vertical` scrolls up (content
+    /// moves down); positive `horizontal` scrolls right. Line units so each
+    /// knob detent is one discrete step; `amount` multiplies for fast turns.
+    /// Requires Accessibility, same as keystrokes.
+    private static func sendScroll(vertical: Int32, horizontal: Int32) {
+        guard hasAccessibility else {
+            NSLog("Scroll skipped: Accessibility permission not granted")
+            return
+        }
+        let src = CGEventSource(stateID: .hidSystemState)
+        // wheelCount 2 so both axes are valid; unused axis is 0.
+        guard let event = CGEvent(
+            scrollWheelEvent2Source: src,
+            units: .line,
+            wheelCount: 2,
+            wheel1: vertical,
+            wheel2: horizontal,
+            wheel3: 0
+        ) else {
+            NSLog("Scroll: failed to create CGEvent")
+            return
+        }
+        event.post(tap: .cghidEventTap)
+    }
+
+    /// Left-clicks at the current cursor position. Useful as a knob press
+    /// alongside scroll rotation. Requires Accessibility.
+    private static func sendMouseClick() {
+        guard hasAccessibility else {
+            NSLog("Mouse click skipped: Accessibility permission not granted")
+            return
+        }
+        let loc = NSEvent.mouseLocation
+        // AppKit y is bottom-up; CGEvent is top-down.
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(loc, $0.frame, false) })
+                ?? NSScreen.main else { return }
+        let cgPoint = CGPoint(x: loc.x, y: screen.frame.maxY - loc.y)
+        let src = CGEventSource(stateID: .hidSystemState)
+        let down = CGEvent(mouseEventSource: src, mouseType: .leftMouseDown,
+                           mouseCursorPosition: cgPoint, mouseButton: .left)
+        let up = CGEvent(mouseEventSource: src, mouseType: .leftMouseUp,
+                         mouseCursorPosition: cgPoint, mouseButton: .left)
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
     }
 
     // US-layout virtual key codes (Carbon kVK_*)

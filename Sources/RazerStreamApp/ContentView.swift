@@ -665,6 +665,11 @@ struct ActionEditor: View {
         case ledBrightnessDown = "Button LED Brightness −"
         case bothBrightnessUp = "Brightness (Screen + LEDs) +"
         case bothBrightnessDown = "Brightness (Screen + LEDs) −"
+        case mouseScrollUp = "Scroll Up"
+        case mouseScrollDown = "Scroll Down"
+        case mouseScrollLeft = "Scroll Left"
+        case mouseScrollRight = "Scroll Right"
+        case mouseClick = "Mouse Click"
         case gotoPage = "Go to Page"
         case nextPage = "Next Page"
         case prevPage = "Previous Page"
@@ -767,6 +772,11 @@ struct ActionEditor: View {
         case .ledBrightnessDown:   kind = .ledBrightnessDown
         case .bothBrightnessUp:    kind = .bothBrightnessUp
         case .bothBrightnessDown:  kind = .bothBrightnessDown
+        case .mouseScrollUp:       kind = .mouseScrollUp
+        case .mouseScrollDown:     kind = .mouseScrollDown
+        case .mouseScrollLeft:     kind = .mouseScrollLeft
+        case .mouseScrollRight:    kind = .mouseScrollRight
+        case .mouseClick:          kind = .mouseClick
         case .gotoPage(let p):     kind = .gotoPage;   pageIndex = p
         case .nextPage:            kind = .nextPage
         case .prevPage:            kind = .prevPage
@@ -795,6 +805,11 @@ struct ActionEditor: View {
         case .ledBrightnessDown: action = .ledBrightnessDown
         case .bothBrightnessUp:   action = .bothBrightnessUp
         case .bothBrightnessDown: action = .bothBrightnessDown
+        case .mouseScrollUp:    action = .mouseScrollUp
+        case .mouseScrollDown:  action = .mouseScrollDown
+        case .mouseScrollLeft:  action = .mouseScrollLeft
+        case .mouseScrollRight: action = .mouseScrollRight
+        case .mouseClick:       action = .mouseClick
         case .gotoPage:   action = .gotoPage(pageIndex)
         case .nextPage:   action = .nextPage
         case .prevPage:   action = .prevPage

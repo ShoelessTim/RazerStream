@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.5.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.1)**
+**Current release: [v1.5.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.2)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -29,11 +29,12 @@ Not affiliated with Razer, Loupedeck, or Logitech.
   LED brightness, page navigation, show the app window, and **macros** (ordered
   multi-step sequences with optional delays between steps)
 - Knob rotation presets: Volume, Screen Brightness, Button LED Brightness,
-  Screen + LED Brightness, Page Navigation, and Track skip are each a single
-  choice instead of hand-wiring clockwise and counterclockwise separately,
-  with one Settings toggle to flip which direction counts as "up" for all of
-  them; fast turns step further. A knob can also be pinned so its config is
-  shared across every page instead of set up per page.
+  Screen + LED Brightness, Page Navigation, Track skip, and Mouse Scroll
+  (vertical or horizontal) are each a single choice instead of hand-wiring
+  clockwise and counterclockwise separately, with one Settings toggle to flip
+  which direction counts as "up" for all of them; fast turns step further. A
+  knob can also be pinned so its config is shared across every page instead of
+  set up per page.
 - Multiple pages per profile (sidebar +/- to add or remove); switch manually,
   use shift-hold layers, or let RazerStream switch pages automatically based
   on which app is frontmost
@@ -48,15 +49,15 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.5.1
+## What's new in 1.5.2
 
-- **Fixed:** bundled pack icons (Bootstrap/Lucide) vanishing on every relaunch.
-  Paths had been absolute into the running .app (often App Translocation),
-  which dies next launch. Stored as stable `IconPacks/…` paths now; old
-  profiles are rewritten on open.
-- **1.5.0:** multi-action macros (ordered steps with delays).
+- **Mouse scroll knobs:** Rotation presets for vertical and horizontal scroll;
+  also Scroll Up/Down/Left/Right and Mouse Click as assignable actions.
+  Fast turns scroll further. Needs Accessibility (same as keystrokes).
+- **1.5.1:** pack icons no longer vanish on relaunch.
+- **1.5.0:** multi-action macros.
 
-Full notes: [release v1.5.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.1).
+Full notes: [release v1.5.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.2).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -78,7 +79,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.5.1.zip` from the
+1. Download `RazerStream-v1.5.2.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

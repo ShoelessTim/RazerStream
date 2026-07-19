@@ -28,6 +28,8 @@ enum KnobRotationMode: Equatable, CaseIterable {
     case combinedBrightness
     case pageNavigation
     case mediaTrack
+    case mouseScrollVertical
+    case mouseScrollHorizontal
     case custom
 
     var displayName: String {
@@ -39,6 +41,8 @@ enum KnobRotationMode: Equatable, CaseIterable {
         case .combinedBrightness: return "Screen + LED Brightness"
         case .pageNavigation: return "Page Navigation"
         case .mediaTrack:    return "Next / Previous Track"
+        case .mouseScrollVertical:   return "Mouse Scroll (Vertical)"
+        case .mouseScrollHorizontal: return "Mouse Scroll (Horizontal)"
         case .custom:        return "Custom…"
         }
     }
@@ -53,6 +57,10 @@ enum KnobRotationMode: Equatable, CaseIterable {
         case .combinedBrightness: return ("brightens the screen and LEDs together", "dims them together")
         case .pageNavigation: return ("goes to the next page", "goes back")
         case .mediaTrack:     return ("skips to the next track", "goes to the previous one")
+        // Scroll: "increases" = further down the page / further right, matching
+        // a typical mouse wheel (roll away / turn right = scroll content down).
+        case .mouseScrollVertical:   return ("scrolls down", "scrolls up")
+        case .mouseScrollHorizontal: return ("scrolls right", "scrolls left")
         case .none, .custom:  return nil
         }
     }
@@ -65,6 +73,8 @@ enum KnobRotationMode: Equatable, CaseIterable {
         if isPair(clockwise, counterClockwise, .bothBrightnessUp, .bothBrightnessDown) { return .combinedBrightness }
         if isPair(clockwise, counterClockwise, .nextPage, .prevPage) { return .pageNavigation }
         if isPair(clockwise, counterClockwise, .mediaNext, .mediaPrevious) { return .mediaTrack }
+        if isPair(clockwise, counterClockwise, .mouseScrollDown, .mouseScrollUp) { return .mouseScrollVertical }
+        if isPair(clockwise, counterClockwise, .mouseScrollRight, .mouseScrollLeft) { return .mouseScrollHorizontal }
         return .custom
     }
 
@@ -84,6 +94,15 @@ enum KnobRotationMode: Equatable, CaseIterable {
             return clockwiseIncreases ? (.nextPage, .prevPage) : (.prevPage, .nextPage)
         case .mediaTrack:
             return clockwiseIncreases ? (.mediaNext, .mediaPrevious) : (.mediaPrevious, .mediaNext)
+        case .mouseScrollVertical:
+            // "Increases" = scroll down (further into the document).
+            return clockwiseIncreases
+                ? (.mouseScrollDown, .mouseScrollUp)
+                : (.mouseScrollUp, .mouseScrollDown)
+        case .mouseScrollHorizontal:
+            return clockwiseIncreases
+                ? (.mouseScrollRight, .mouseScrollLeft)
+                : (.mouseScrollLeft, .mouseScrollRight)
         case .custom:
             return (.none, .none)   // caller should leave existing fields alone in this case
         }

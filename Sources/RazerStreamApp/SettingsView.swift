@@ -141,7 +141,7 @@ struct SettingsView: View {
                     deviceManager.pushCurrentPage()
                 }
             } footer: {
-                Text("Applies to every knob set to Volume or Brightness rotation, on every page and profile.")
+                Text("Applies to every knob set to Volume, Brightness, Page Navigation, Track, or Mouse Scroll rotation, on every page and profile.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
