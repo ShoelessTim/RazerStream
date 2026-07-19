@@ -1,14 +1,46 @@
-# Launch post
+# Announcement posts
 
-Ready to paste for Reddit (r/Loupedeck, r/razer, r/macapps), Razer Insider,
-or as a Show HN. Trim to taste.
+## Update post (v1.4.72) — paste for Reddit
 
-Already posted to r/loupedeck (2026-07-15, v1.0) with a follow-up
-(2026-07-17, v1.4.0) covering what shipped since launch; check that thread
-for real community feedback before reusing this on a new platform, since
-some of it (Loupedeck CT support, a plugin API, macros) is already answered
-or in progress. This post itself is still accurate as an initial pitch for
-platforms that haven't seen it yet.
+Already posted to r/loupedeck (2026-07-15 launch, 2026-07-17 v1.4.0 follow-up).
+Use this as a reply in that thread and/or a short new post if the sub allows.
+
+Title: RazerStream 1.4.72: page add/delete fix, LED brightness knobs, live tiles
+
+Body:
+
+Quick update on RazerStream, the free native macOS app for the orphaned Razer Stream Controller / Loupedeck Live.
+
+**1.4.72** is a tidy stabilization of the 1.4.7 line, not a huge feature dump. Goal: something solid you can run while the next bug-fix pass happens.
+
+### Fixed
+
+- **Couldn't add or delete pages** in the sidebar on some setups. The +/- bar could vanish depending on window size / layout. It's now a real native control at the top of the page list. (GitHub issue #1)
+
+### From the 1.4.7 line (if you skipped those)
+
+- Knob presets: **Button LED Brightness**, and **Screen + LED Brightness** together, on top of Volume / Screen Brightness / Page Nav / Track
+- Turning an LED brightness knob actually moves the LEDs now (continuous turns used to cancel the write mid-flight)
+- Live tiles: CPU/RAM, **disk free space** (pick a volume); pie charts on the knob strips
+- Idle dimming paces LED writes so they don't get silently dropped by the serial buffer
+- Custom SVG sizing path for user icon libraries (if you still see tiny SVGs on knobs/tiles after 1.4.72, please comment on issue #2 with OS version)
+
+### Download
+
+- Latest: https://github.com/ShoelessTim/RazerStream/releases/latest
+- Homebrew: `brew upgrade --cask razerstream` (after `brew tap shoelesstim/tap`)
+- Wiki / FAQ: https://github.com/ShoelessTim/RazerStream/wiki
+
+Still macOS 14+, Developer ID signed and notarized. Still free, still open source, still not affiliated with Razer / Loupedeck / Logitech.
+
+Known open: multi-action macros, mouse-scroll knob preset, plugin API, Loupedeck CT, and confirmation that SVG icons look right on macOS 26.x. Happy for bug reports and PRs.
+
+---
+
+## Original launch post (v1.0)
+
+Ready to paste for platforms that haven't seen the project yet. For r/loupedeck
+prefer the update post above (or a reply in the existing thread).
 
 Title: RazerStream: a free, native macOS app that revives the orphaned Razer Stream Controller
 
