@@ -134,7 +134,7 @@ forks and sends pull requests; nothing about his workflow changes.
 9. Webhooks and Home Assistant/MQTT actions
 10. [x] Multi-action macros: `ControlAction.sequence([MacroStep])` with
     per-step delay; action picker kind Macro; nested sequences flattened
-    at play time; empty steps skipped (shipped after v1.4.73)
+    at play time; empty steps skipped (shipped v1.5.0)
 11. Plugin API: action providers as separate processes or scripts. Concrete
     requirements from a real use case (r/loupedeck, u/Cuica, 2026-07-16; a
     Jellyfin media-player controller, migrating off a custom Loupedeck C#
@@ -220,7 +220,7 @@ forks and sends pull requests; nothing about his workflow changes.
      1.4.7 line; still wants confirmation on the reporter's macOS version
      (26.5.2) since this dev machine could not reproduce the original size
      resolution failure. Open for the next bug-fix pass if still reported.
-   - [x] Multi-action macros (shipped after v1.4.73): `ControlAction.sequence`
+   - [x] Multi-action macros (shipped v1.5.0): `ControlAction.sequence`
      of `MacroStep` (leaf action + delayAfterMs). Editor is Macro in the
      action picker; steps reuse the same action editor with nesting blocked.
      Playback flattens any nested sequences, skips `.none` steps, keeps going
