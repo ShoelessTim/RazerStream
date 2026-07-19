@@ -24,15 +24,17 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Actions: open app, open URL, shell command, AppleScript, recorded keystroke,
   media keys, volume with the native on-screen HUD, screen brightness, page
   navigation, and show the app window
-- Knob rotation presets: Volume, Screen Brightness, Page Navigation, and
-  Track skip are each a single choice instead of hand-wiring clockwise and
-  counterclockwise separately, with one Settings toggle to flip which
-  direction counts as "up" for all of them; fast turns step further. A knob
-  can also be pinned so its config is shared across every page instead of
-  set up per page.
-- Multiple pages per profile; switch manually, use shift-hold layers, or let
-  RazerStream switch pages automatically based on which app is frontmost
-- Live tiles that redraw themselves: a clock, and a CPU/RAM usage meter
+- Knob rotation presets: Volume, Screen Brightness, Button LED Brightness,
+  Screen + LED Brightness, Page Navigation, and Track skip are each a single
+  choice instead of hand-wiring clockwise and counterclockwise separately,
+  with one Settings toggle to flip which direction counts as "up" for all of
+  them; fast turns step further. A knob can also be pinned so its config is
+  shared across every page instead of set up per page.
+- Multiple pages per profile (sidebar +/- to add or remove); switch manually,
+  use shift-hold layers, or let RazerStream switch pages automatically based
+  on which app is frontmost
+- Live tiles that redraw themselves: a clock, a CPU/RAM usage meter, and
+  disk free space on a chosen volume
 - Haptic feedback on press (device-dependent), with a pattern picker
 - Idle dimming: screen and button LEDs fade after inactivity and wake on any
   input; the status light is never touched, so connection state always

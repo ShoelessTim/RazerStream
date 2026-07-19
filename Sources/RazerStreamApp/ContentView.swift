@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 import UniformTypeIdentifiers
 import RazerStreamKit
@@ -179,61 +180,58 @@ struct ContentView: View {
     }
 
     private var sidebar: some View {
-        List(selection: selectedPageID) {
-            Section("Pages") {
-                ForEach(store.activeProfile.pages) { page in
-                    PageRow(page: page)
-                        .tag(page.id)
-                        .contextMenu {
-                            if store.activeProfile.pages.count > 1 {
-                                Button("Delete", role: .destructive) {
-                                    store.deletePage(page.id)
-                                    deviceManager.pushCurrentPage()
-                                }
-                            }
-                        }
-                }
-                .onMove { indices, newOffset in
-                    store.movePages(fromOffsets: indices, toOffset: newOffset)
-                    deviceManager.pushCurrentPage()
-                }
-            }
-        }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Classic Apple list accessory bar (System Settings, Login
-            // Items): a persistent +/- pair, not a hidden context menu.
-            VStack(spacing: 0) {
-                Divider()
-                HStack(spacing: 0) {
-                    Button {
+        VStack(spacing: 0) {
+            // At the top, not tucked into a bottom safeAreaInset: a
+            // safeAreaInset bar can end up clipped or simply not visible
+            // depending on window size and the exact List/NavigationSplitView
+            // layout pass on a given macOS version (reported: no add/delete
+            // controls visible at all, even after resizing). Above the list
+            // is unconditionally on-screen the moment the sidebar renders.
+            // Genuine NSSegmentedControl (.separated style) rather than a
+            // hand-built HStack of buttons, since that's the actual native
+            // control macOS itself uses for this exact pattern (Finder tags,
+            // System Settings lists, Mail mailboxes) and is more robust
+            // across OS versions than a custom SwiftUI reconstruction.
+            HStack(spacing: 0) {
+                PageAccessoryBar(
+                    canDelete: store.activeProfile.pages.count > 1,
+                    onAdd: {
                         store.addPage()
                         deviceManager.pushCurrentPage()
-                    } label: {
-                        Image(systemName: "plus")
-                            .frame(width: 22, height: 22)
-                    }
-                    .help("Add Page")
-
-                    Divider().frame(height: 12)
-
-                    Button {
+                    },
+                    onDelete: {
                         store.deletePage(store.currentPage.id)
                         deviceManager.pushCurrentPage()
-                    } label: {
-                        Image(systemName: "minus")
-                            .frame(width: 22, height: 22)
                     }
-                    .disabled(store.activeProfile.pages.count <= 1)
-                    .help("Remove Selected Page")
-
-                    Spacer()
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
+                )
+                .fixedSize()
+                Spacer()
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            Divider()
+
+            List(selection: selectedPageID) {
+                Section("Pages") {
+                    ForEach(store.activeProfile.pages) { page in
+                        PageRow(page: page)
+                            .tag(page.id)
+                            .contextMenu {
+                                if store.activeProfile.pages.count > 1 {
+                                    Button("Delete", role: .destructive) {
+                                        store.deletePage(page.id)
+                                        deviceManager.pushCurrentPage()
+                                    }
+                                }
+                            }
+                    }
+                    .onMove { indices, newOffset in
+                        store.movePages(fromOffsets: indices, toOffset: newOffset)
+                        deviceManager.pushCurrentPage()
+                    }
+                }
+            }
+            .listStyle(.sidebar)
         }
     }
 }
@@ -300,6 +298,64 @@ private struct PageRow: View {
         let trimmed = draftName.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { store.renamePage(page.id, to: trimmed) }
         isEditing = false
+    }
+}
+
+// MARK: - Native +/- accessory control
+
+// NSSegmentedControl(.separated) is the actual AppKit control behind this
+// exact pattern in Finder's tag list, System Settings, and Mail's mailbox
+// list; wrapping it directly is more robust across macOS versions than a
+// hand-built HStack of SwiftUI buttons trying to look the same.
+private struct PageAccessoryBar: NSViewRepresentable {
+    var canDelete: Bool
+    var onAdd: () -> Void
+    var onDelete: () -> Void
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl(
+            images: [
+                NSImage(systemSymbolName: "plus", accessibilityDescription: "Add Page")!,
+                NSImage(systemSymbolName: "minus", accessibilityDescription: "Remove Selected Page")!,
+            ],
+            trackingMode: .momentary,
+            target: context.coordinator,
+            action: #selector(Coordinator.segmentClicked(_:))
+        )
+        control.segmentStyle = .separated
+        for i in 0..<control.segmentCount {
+            control.setWidth(24, forSegment: i)
+        }
+        return control
+    }
+
+    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        context.coordinator.onAdd = onAdd
+        context.coordinator.onDelete = onDelete
+        nsView.setEnabled(true, forSegment: 0)
+        nsView.setEnabled(canDelete, forSegment: 1)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onAdd: onAdd, onDelete: onDelete)
+    }
+
+    final class Coordinator: NSObject {
+        var onAdd: () -> Void
+        var onDelete: () -> Void
+
+        init(onAdd: @escaping () -> Void, onDelete: @escaping () -> Void) {
+            self.onAdd = onAdd
+            self.onDelete = onDelete
+        }
+
+        @objc func segmentClicked(_ sender: NSSegmentedControl) {
+            switch sender.selectedSegment {
+            case 0: onAdd()
+            case 1: onDelete()
+            default: break
+            }
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 # RazerStream software brief
 
 Written as a standalone reference for planning v2 and beyond; accurate as of
-tag v1.4.2 on the main branch of github.com/ShoelessTim/RazerStream.
+tag v1.4.72 on the main branch of github.com/ShoelessTim/RazerStream.
 
 ## What it is
 
@@ -94,28 +94,37 @@ tile grid starts at x=60. Control ids: 1 to 6 are knob presses (left column
 top to bottom, then right), 7 to 14 are the physical buttons left to right;
 button id 7's LED is the device status light and must never be written.
 
-## What is shipped and working (v1.4.2)
+## What is shipped and working (v1.4.72)
+
+v1.4.72 is a tidy stabilization of the 1.4.7 line: the LED-brightness work
+and live-tile additions from that morning, plus a reliable page add/delete
+control in the sidebar. Intermediate version bumps (1.4.3 through 1.4.9)
+were never the public release story; this is.
 
 - Full input: all tiles, knobs (turn and press), buttons, touchscreen
 - Full output: tile images (SF Symbols, bundled/user icon packs, custom
   images, colors), knob strip labels and icons (plus live content), button
-  LEDs, brightness
+  LEDs, screen and button-LED brightness
 - Behavior modes: tap, toggle (stateful, icon and LED reflect state),
   momentary, shift (hold to reveal another page)
 - Actions: app launch, URL, shell, AppleScript, recorded keystrokes, media
-  keys (native volume HUD), screen brightness, page navigation, show app
-  window
-- Knob rotation presets (Volume/Brightness/Page Navigation/Track) as single
-  choices with a shared handedness setting, instead of hand-wiring clockwise
-  and counterclockwise separately; fast turns accelerate the step
+  keys (native volume HUD), screen brightness, button LED brightness, page
+  navigation, show app window
+- Knob rotation presets (Volume, Screen Brightness, Button LED Brightness,
+  Screen + LED Brightness, Page Navigation, Track) as single choices with a
+  shared handedness setting; fast turns accelerate the step. Brightness knobs
+  use a dedicated `pushBrightness` path so continuous turns reach the LEDs
+  instead of cancelling a full page redraw mid-flight
 - A knob can be pinned to share its config across every page
 - Multiple pages per profile, including automatic page-switching based on
-  the frontmost app (Settings > Apps)
-- Live tiles: clock, CPU/RAM meter, on both tiles and knob strips
+  the frontmost app (Settings > Apps); sidebar has a native +/- bar at the
+  top to add or remove pages (context-menu delete still works too)
+- Live tiles: clock, CPU/RAM meter, disk free space (per-volume), on both
+  tiles and knob strips (knob strips use small pie charts for meters)
 - Haptic feedback on press (device-dependent), Settings > Haptics tab
 - Idle dimming of the screen and button LEDs after inactivity, off by
   default; the status light is never touched, so connection state always
-  stays visible
+  stays visible; LED idle writes are paced so the device does not drop them
 - Native `.razerstream` single-profile export/import (Settings > History)
 - Profile version history (autosave snapshots), separate from export/import
 - Auto reconnect on device unplug and crash recovery; a stale-serial-buffer
@@ -136,8 +145,8 @@ button id 7's LED is the device status light and must never be written.
   framework; flagged as risky, not attempted) and a calendar next-up tile
 - Multi-action macros (fire a sequence of actions from one control); called
   out directly by a user as a must-have for a real Loupedeck replacement
-- Mouse scroll and LED-brightness-as-a-knob-preset (LED brightness is tied to
-  idle dimming as of v1.4.2, but not manually adjustable via a knob yet)
+- Mouse scroll as a knob rotation preset (LED brightness as a knob preset
+  shipped in the 1.4.7 line)
 - Profile-per-app as an alternative to the current page-per-app-within-one-
   profile model; a real design fork, not decided
 - Touch gestures beyond tap; two-finger swipe was shipped in v1.4.1 and

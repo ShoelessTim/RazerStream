@@ -206,6 +206,17 @@ forks and sends pull requests; nothing about his workflow changes.
      Added `pushBrightness()`, a dedicated lightweight push (just
      setBrightness + button colors, no tile/knob redraw) on its own task,
      used by both the knob presets and the Settings sliders now.
+   - [x] Can't add or delete pages (GitHub #1): the sidebar +/- accessory
+     bar lived in a `safeAreaInset` that could end up clipped or invisible
+     on some window sizes and macOS layout passes. Fixed in v1.4.72 by
+     moving a genuine NSSegmentedControl (.separated) to the top of the
+     sidebar, above the page list, so it is always on screen. Context-menu
+     delete on a page row remains as a fallback.
+   - Custom SVG icons from a user library rendering too small (GitHub #2,
+     worse on knobs than tiles): a size-normalization path landed in the
+     1.4.7 line; still wants confirmation on the reporter's macOS version
+     (26.5.2) since this dev machine could not reproduce the original size
+     resolution failure. Open for the next bug-fix pass if still reported.
    - Multi-action macros: fire a sequence of ControlActions from one tap,
      not just a single action. Called out as "a must" to be a viable
      Loupedeck replacement. Real scope decision needed: a new
