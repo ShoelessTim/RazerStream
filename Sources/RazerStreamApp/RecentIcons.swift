@@ -28,9 +28,10 @@ enum RecentIcons {
     /// icon, and calls it after every pick in IconPicker.
     static func record(symbol: String?, imagePath: String?, tint: Bool) {
         guard (symbol?.isEmpty == false) || (imagePath?.isEmpty == false) else { return }
+        let storedPath = imagePath.map { IconPath.stabilize($0) }
         var list = items
-        list.removeAll { $0.symbol == symbol && $0.imagePath == imagePath }
-        list.insert(RecentIcon(symbol: symbol, imagePath: imagePath, tint: tint), at: 0)
+        list.removeAll { $0.symbol == symbol && $0.imagePath == storedPath }
+        list.insert(RecentIcon(symbol: symbol, imagePath: storedPath, tint: tint), at: 0)
         if list.count > limit { list.removeLast(list.count - limit) }
         items = list
     }

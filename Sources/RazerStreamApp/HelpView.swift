@@ -72,6 +72,7 @@ struct HelpView: View {
                     labeled("No connection", "check that the old Loupedeck app is not running; it grabs the port.")
                     labeled("Volume works but keystrokes don't", "that's the Accessibility grant; see Permissions above.")
                     labeled("Tiles look dim", "brightness is per profile; it restores on every connect.")
+                    labeled("Pack icons missing after relaunch", "fixed in 1.5.1; bundled icons are stored as stable IconPacks/… paths instead of a temporary app location. Open the app once to rewrite an old profile, or re-pick the icon.")
                 }
 
                 footer

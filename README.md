@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.5.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.0)**
+**Current release: [v1.5.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.1)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -48,17 +48,15 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.5.0
+## What's new in 1.5.1
 
-- **Macros:** one control can run several actions in order, with an optional
-  wait after each step. Pick **Macro (multi-step)** in the action picker;
-  add keystrokes, open app, shell, etc. Multi-keystroke is N keystroke steps
-  with ~100 ms between chords (no Apple multi-key API; this is the right shape).
-- Includes everything from the 1.4.72/1.4.73 line: reliable page +/−, LED
-  brightness knobs, disk free-space live tile, SVG size normalization,
-  Xcode 16.4 build fix.
+- **Fixed:** bundled pack icons (Bootstrap/Lucide) vanishing on every relaunch.
+  Paths had been absolute into the running .app (often App Translocation),
+  which dies next launch. Stored as stable `IconPacks/…` paths now; old
+  profiles are rewritten on open.
+- **1.5.0:** multi-action macros (ordered steps with delays).
 
-Full notes: [release v1.5.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.0).
+Full notes: [release v1.5.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.1).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -80,7 +78,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.5.0.zip` from the
+1. Download `RazerStream-v1.5.1.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

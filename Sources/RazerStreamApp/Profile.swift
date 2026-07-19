@@ -498,7 +498,44 @@ final class ProfileStore: ObservableObject {
         guard let decoded = try? JSONDecoder().decode(SavedState.self, from: data) else { return false }
         profiles = decoded.profiles
         activeProfileID = decoded.activeProfileID
+        // Rewrite dead absolute paths into bundled IconPacks (App Translocation
+        // and app-move survivors). Returns true when anything changed so the
+        // caller can persist the repaired profile.
+        if stabilizeAllIconPaths() {
+            save()
+        }
         return true
+    }
+
+    /// Walks every tile/knob imagePath and rewrites bundled-pack absolute
+    /// paths to the stable `IconPacks/<pack>/<file>` form. Fixes profiles
+    /// that lost pack icons on every relaunch because they pointed at a
+    /// one-shot App Translocation directory.
+    @discardableResult
+    func stabilizeAllIconPaths() -> Bool {
+        var changed = false
+        func fix(_ path: inout String?) {
+            guard let p = path else { return }
+            let stable = IconPath.stabilize(p)
+            if stable != p {
+                path = stable
+                changed = true
+            }
+        }
+        for pIdx in profiles.indices {
+            for pageIdx in profiles[pIdx].pages.indices {
+                for tIdx in profiles[pIdx].pages[pageIdx].tiles.indices {
+                    fix(&profiles[pIdx].pages[pageIdx].tiles[tIdx].imagePath)
+                }
+                for kIdx in profiles[pIdx].pages[pageIdx].knobs.indices {
+                    fix(&profiles[pIdx].pages[pageIdx].knobs[kIdx].imagePath)
+                }
+            }
+            for kIdx in profiles[pIdx].globalKnobs.indices {
+                fix(&profiles[pIdx].globalKnobs[kIdx].imagePath)
+            }
+        }
+        return changed
     }
 
     func save() {

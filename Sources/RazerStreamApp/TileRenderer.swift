@@ -116,7 +116,9 @@ enum TileRenderer {
 
         // Custom image beats SF symbol; both centered. Tinted images (mono
         // SVG pack icons) render white with symbol-style insets.
-        if let path = tile.imagePath, let nsImage = NSImage(contentsOfFile: path) {
+        if let stored = tile.imagePath,
+           let path = IconPath.resolved(stored),
+           let nsImage = NSImage(contentsOfFile: path) {
             if tile.iconTint {
                 if let cgImage = tintedWhite(nsImage)?
                     .cgImage(forProposedRect: nil, context: nil, hints: nil) {
@@ -178,7 +180,9 @@ enum TileRenderer {
         // Custom image (from an icon pack or user file) beats an SF Symbol,
         // same precedence as tiles. Tinted images render white.
         var iconImage: CGImage?
-        if let path = knob.imagePath, let nsImage = NSImage(contentsOfFile: path) {
+        if let stored = knob.imagePath,
+           let path = IconPath.resolved(stored),
+           let nsImage = NSImage(contentsOfFile: path) {
             if knob.iconTint {
                 iconImage = tintedWhite(nsImage)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
             } else {

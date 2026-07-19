@@ -425,7 +425,9 @@ extension ContentView {
                     .fill(Color.quantizedToTilePanel(hex: tile.colorHex))
                 if tile.liveContent == .clock {
                     clockFace()
-                } else if let path = tile.imagePath, let img = NSImage(contentsOfFile: path) {
+                } else if let stored = tile.imagePath,
+                          let path = IconPath.resolved(stored),
+                          let img = NSImage(contentsOfFile: path) {
                     Image(nsImage: img)
                         .renderingMode(tile.iconTint ? .template : .original)
                         .resizable().scaledToFit()
@@ -519,7 +521,9 @@ extension ContentView {
                             compactClockFace()
                         } else {
                             VStack(spacing: 4) {
-                                if let path = knob.imagePath, let img = NSImage(contentsOfFile: path) {
+                                if let stored = knob.imagePath,
+                                   let path = IconPath.resolved(stored),
+                                   let img = NSImage(contentsOfFile: path) {
                                     Image(nsImage: img)
                                         .renderingMode(knob.iconTint ? .template : .original)
                                         .resizable().scaledToFit()
@@ -1110,7 +1114,7 @@ struct TileInspector: View {
                 colorHex: color.hexString,
                 sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
                 altSymbol: altSymbol.isEmpty ? nil : altSymbol,
-                imagePath: imagePath.isEmpty ? nil : imagePath,
+                imagePath: imagePath.isEmpty ? nil : IconPath.stabilize(imagePath),
                 iconTint: iconTint,
                 liveContent: liveContent,
                 diskSpaceVolume: diskSpaceVolume,
@@ -1270,7 +1274,7 @@ struct KnobInspector: View {
         store.updateKnob(knobIndex, KnobConfig(
             label: label,
             sfSymbol: sfSymbol.isEmpty ? nil : sfSymbol,
-            imagePath: imagePath.isEmpty ? nil : imagePath,
+            imagePath: imagePath.isEmpty ? nil : IconPath.stabilize(imagePath),
             iconTint: iconTint,
             liveContent: liveContent,
             diskSpaceVolume: diskSpaceVolume,

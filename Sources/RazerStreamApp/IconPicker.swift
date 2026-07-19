@@ -174,11 +174,15 @@ struct IconPicker: View {
     }
 
     private func pickPackIcon(_ icon: IconPack.IconEntry) {
-        imagePath = icon.path
+        // Stabilize so bundled pack paths don't bake in App Translocation or
+        // a one-shot .app location (that is what made pack icons vanish on
+        // every relaunch in 1.5.0 and earlier).
+        let stored = IconPath.stabilize(icon.path)
+        imagePath = stored
         symbol = ""
         // Mono SVG packs (stroke currentColor) need a white tint on dark tiles
-        tintIcon = icon.path.lowercased().hasSuffix(".svg")
-        RecentIcons.record(symbol: nil, imagePath: icon.path, tint: tintIcon)
+        tintIcon = stored.lowercased().hasSuffix(".svg")
+        RecentIcons.record(symbol: nil, imagePath: stored, tint: tintIcon)
         dismiss()
     }
 }
