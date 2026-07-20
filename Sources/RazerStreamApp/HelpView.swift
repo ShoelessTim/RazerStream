@@ -72,7 +72,8 @@ struct HelpView: View {
                     labeled("Device screen blank", "unplug the USB cable, wait two seconds, plug back in; the app reconnects on its own within a few seconds.")
                     labeled("No connection", "check that the old Loupedeck app is not running; it grabs the port.")
                     labeled("Volume works but keystrokes don't", "that's the Accessibility grant; see Permissions above.")
-                    labeled("Tiles look dim", "brightness is per profile; it restores on every connect.")
+                    labeled("Tiles look dim", "brightness is per profile; it restores on every connect. If Dim after inactivity is on, the panel fades after idle and wakes on the next button, knob, or touch.")
+                    labeled("Deck goes dead after sitting idle", "fixed in 1.5.3; live tiles were still blasting the serial port while dimmed and could hang the device. Update, or turn off Settings → Device → Dim after inactivity as a workaround.")
                     labeled("Pack icons missing after relaunch", "fixed in 1.5.1; bundled icons are stored as stable IconPacks/… paths instead of a temporary app location. Open the app once to rewrite an old profile, or re-pick the icon.")
                 }
 

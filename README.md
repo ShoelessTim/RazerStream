@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.5.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.2)**
+**Current release: [v1.5.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.3)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -49,15 +49,16 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.5.2
+## What's new in 1.5.3
 
-- **Mouse scroll knobs:** Rotation presets for vertical and horizontal scroll;
-  also Scroll Up/Down/Left/Right and Mouse Click as assignable actions.
-  Fast turns scroll further. Needs Accessibility (same as keystrokes).
+- **Fixed:** idle dim soft-fail / deck going dead after inactivity. Live
+  tiles no longer flood the serial port while dimmed; brightness and LED
+  pushes respect dim state; LED dim/wake is cancelable.
+- **1.5.2:** mouse scroll knobs.
 - **1.5.1:** pack icons no longer vanish on relaunch.
 - **1.5.0:** multi-action macros.
 
-Full notes: [release v1.5.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.2).
+Full notes: [release v1.5.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.3).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -79,7 +80,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.5.2.zip` from the
+1. Download `RazerStream-v1.5.3.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

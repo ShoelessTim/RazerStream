@@ -17,6 +17,7 @@ final class DeviceManager: ObservableObject {
     private var reconnectTask: Task<Void, Never>?
     private var pushTask: Task<Void, Never>?
     private var brightnessTask: Task<Void, Never>?
+    private var ledWriteTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
     private var systemMeterTask: Task<Void, Never>?
     private var idleCheckTask: Task<Void, Never>?
@@ -53,6 +54,8 @@ final class DeviceManager: ObservableObject {
         eventTask?.cancel()
         reconnectTask?.cancel()
         pushTask?.cancel()
+        brightnessTask?.cancel()
+        ledWriteTask?.cancel()
         liveTileTask?.cancel()
         systemMeterTask?.cancel()
         idleCheckTask?.cancel()
@@ -64,9 +67,15 @@ final class DeviceManager: ObservableObject {
 
     // MARK: - Idle dimming
 
+    // Screen brightness used while idle-dimmed. 1 matches the device's own
+    // lowest visible step (0 is fully off and can look like a disconnect).
+    private static let idleScreenBrightness: UInt8 = 1
+
     private func startIdleCheck() {
         idleCheckTask?.cancel()
-        idleCheckTask = Task { [weak self] in
+        // Explicit MainActor task: DeviceManager is @MainActor and checkIdle
+        // mutates device state; a detached background hop was never intended.
+        idleCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 if Task.isCancelled { return }
@@ -80,7 +89,11 @@ final class DeviceManager: ObservableObject {
         let timeout = TimeInterval(IdleDimming.minutes * 60)
         guard timeout > 0, Date().timeIntervalSince(lastInputAt) >= timeout else { return }
         isDimmed = true
-        try? device.send(.setBrightness(1))
+        // Cancel any in-flight full-brightness / full-LED push so dimming
+        // is not immediately undone by a late brightnessTask or pushTask.
+        brightnessTask?.cancel()
+        ledWriteTask?.cancel()
+        try? device.send(.setBrightness(Self.idleScreenBrightness))
         setButtonLEDs(device: device, page: store.resolvedCurrentPage, dimmed: true)
     }
 
@@ -91,13 +104,30 @@ final class DeviceManager: ObservableObject {
         lastInputAt = Date()
         guard isDimmed, let device, let store else { return }
         isDimmed = false
+        brightnessTask?.cancel()
+        ledWriteTask?.cancel()
         try? device.send(.setBrightness(store.activeProfile.brightness))
         setButtonLEDs(device: device, page: store.resolvedCurrentPage, dimmed: false)
+        // Live tiles were paused while dimmed; refresh once on wake so the
+        // clock/meter are not stuck on the last pre-dim frame.
+        refreshLiveTiles()
+        refreshSystemMeterTiles()
     }
 
     // Faint but still visible, roughly matching the touchscreen's own
     // dim-to-lowest-step level.
     private static let dimmedLEDFactor = 0.12
+
+    /// Effective LED scale for the current idle state (manual LED brightness
+    /// multiplied by the idle dim factor when dimmed).
+    private var effectiveLEDScale: Double {
+        ledBrightnessScale * (isDimmed ? Self.dimmedLEDFactor : 1)
+    }
+
+    /// Screen brightness to send right now, respecting idle dim.
+    private var effectiveScreenBrightness: UInt8 {
+        isDimmed ? Self.idleScreenBrightness : (store?.activeProfile.brightness ?? 8)
+    }
 
     /// Scales every configurable button LED down to a faint glow (or back
     /// up to its configured color). Index 0 / physical ID 7 is always
@@ -108,14 +138,14 @@ final class DeviceManager: ObservableObject {
     ///
     /// Paced the same as pushCurrentPage's button loop (~20ms apart): firing
     /// all 7 SET_COLOR commands back to back with no delay overruns the
-    /// device's serial buffer and gets silently dropped, which is exactly
-    /// why this looked like idle dimming did nothing to the LEDs even
-    /// though the identical scaling logic worked fine from the Settings
-    /// slider (a single command at a time, no burst).
+    /// device's serial buffer and gets silently dropped. Cancelable via
+    /// ledWriteTask so dim/wake and pushBrightness do not stack races.
     private func setButtonLEDs(device: RazerStreamDevice, page: Page, dimmed: Bool) {
         let scale = ledBrightnessScale * (dimmed ? Self.dimmedLEDFactor : 1)
-        Task {
+        ledWriteTask?.cancel()
+        ledWriteTask = Task {
             for (i, button) in page.buttons.enumerated() where i > 0 {
+                if Task.isCancelled { return }
                 let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: scale)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
@@ -146,7 +176,12 @@ final class DeviceManager: ObservableObject {
     }
 
     private func refreshLiveTiles() {
-        guard connected, let store else { return }
+        // Skip while idle-dimmed: each tile is a large RGB565 framebuffer,
+        // and the CPU/RAM meter already runs every 2s. Flooding the serial
+        // port during dim was a soft-fail path (device stops responding or
+        // the deck looks dead until unplug). Content is refreshed on wake
+        // via the next noteInput-driven redraw or the next timer tick after.
+        guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
         for (i, tile) in page.tiles.enumerated() where tile.liveContent != .none {
             pushTile(i)
@@ -170,7 +205,7 @@ final class DeviceManager: ObservableObject {
     }
 
     private func refreshSystemMeterTiles() {
-        guard connected, let store else { return }
+        guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
         for (i, tile) in page.tiles.enumerated() where tile.liveContent == .systemMeter {
             pushTile(i)
@@ -444,13 +479,16 @@ final class DeviceManager: ObservableObject {
     /// each other.
     func pushBrightness() {
         guard let device, let store else { return }
-        let profile = store.activeProfile
         let page = store.resolvedCurrentPage
-        let ledScale = ledBrightnessScale
+        // Respect idle dim: a Settings slider or knob brightness change while
+        // dimmed must not flash the panel full-bright then leave isDimmed true.
+        let screenLevel = effectiveScreenBrightness
+        let ledScale = effectiveLEDScale
 
         brightnessTask?.cancel()
+        ledWriteTask?.cancel()
         brightnessTask = Task {
-            try? device.send(.setBrightness(profile.brightness))
+            try? device.send(.setBrightness(screenLevel))
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
                 let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
@@ -469,16 +507,22 @@ final class DeviceManager: ObservableObject {
         guard let device, let store else { return }
         let profile = store.activeProfile
         let page = store.resolvedCurrentPage
+        // Capture idle state for this push so a mid-push wake does not leave
+        // half the LEDs at the wrong scale.
+        let dimmed = isDimmed
+        let screenLevel: UInt8 = dimmed ? Self.idleScreenBrightness : profile.brightness
+        let ledScale = ledBrightnessScale * (dimmed ? Self.dimmedLEDFactor : 1)
 
         // Pace writes; blasting framebuffers back to back overruns the
         // device's serial buffer and nothing renders
         pushTask?.cancel()
+        ledWriteTask?.cancel()
         pushTask = Task {
             if choreography {
                 await self.runLEDCascade(device: device, page: page)
-                await self.fadeInBrightness(device: device, to: profile.brightness)
+                await self.fadeInBrightness(device: device, to: screenLevel)
             } else {
-                try? device.send(.setBrightness(profile.brightness))
+                try? device.send(.setBrightness(screenLevel))
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
@@ -503,7 +547,6 @@ final class DeviceManager: ObservableObject {
 
             // Physical button LEDs (device IDs 7 to 14). Index 0 / ID 7 is the
             // status light; the device manages it, never write it.
-            let ledScale = self.ledBrightnessScale
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
                 let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
