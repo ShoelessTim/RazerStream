@@ -7,6 +7,10 @@ import SwiftUI
 final class AppActions {
     static let shared = AppActions()
     var showMainWindow: (() -> Void)?
+    // The window's onAppear fires every time it opens, not just at launch;
+    // this gates the launch-time "start hidden in the menu bar" behavior so
+    // a later manual reopen always shows the window normally.
+    var didHandleLaunch = false
 }
 
 @main
@@ -17,6 +21,10 @@ struct RazerStreamApp: App {
 
     // 0 = follow system (default), 1 = light, 2 = dark
     @AppStorage("appearanceMode") private var appearanceMode = 0
+
+    // When set, launch straight to the menu bar (no window, no Dock icon)
+    // instead of opening the control window.
+    @AppStorage("launchInMenuBar") private var launchInMenuBar = false
 
     init() {
         setbuf(stdout, nil)   // immediate debug output when piped to a file
@@ -43,14 +51,40 @@ struct RazerStreamApp: App {
                 .environmentObject(packManager)
                 .preferredColorScheme(colorScheme)
                 .onAppear {
-                    // Bare binaries aren't foreground apps by default;
-                    // promote ourselves so the window actually shows
-                    NSApp.setActivationPolicy(.regular)
-                    NSApp.activate(ignoringOtherApps: true)
                     deviceManager.start(store: store)
-                    // Capture a reopen closure for non-SwiftUI callers
+                    // Capture a reopen closure for non-SwiftUI callers; always
+                    // promotes back to a normal windowed app, so "Show
+                    // RazerStream" works even when we launched menu-bar-only.
                     AppActions.shared.showMainWindow = {
+                        NSApp.setActivationPolicy(.regular)
                         openWindow(id: "main")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+
+                    // onAppear also fires on every later reopen; only the very
+                    // first pass is "launch", and only then do we honor the
+                    // start-hidden preference.
+                    if AppActions.shared.didHandleLaunch {
+                        NSApp.setActivationPolicy(.regular)
+                        NSApp.activate(ignoringOtherApps: true)
+                        return
+                    }
+                    AppActions.shared.didHandleLaunch = true
+
+                    if launchInMenuBar {
+                        // Live only in the menu bar: no Dock icon, no app menus,
+                        // and close the window this scene just opened.
+                        NSApp.setActivationPolicy(.accessory)
+                        DispatchQueue.main.async {
+                            NSApp.windows.first {
+                                ($0.identifier?.rawValue.contains("main") ?? false)
+                                    || $0.title == "RazerStream"
+                            }?.close()
+                        }
+                    } else {
+                        // Bare binaries aren't foreground apps by default;
+                        // promote ourselves so the window actually shows.
+                        NSApp.setActivationPolicy(.regular)
                         NSApp.activate(ignoringOtherApps: true)
                     }
                 }
@@ -111,6 +145,11 @@ struct RazerStreamApp: App {
             Divider()
             Button("Show RazerStream") {
                 AppActions.shared.showMainWindow?()
+            }
+            // Reachable even when launched menu-bar-only (no app menus, so
+            // Cmd-comma isn't available until the window is shown).
+            SettingsLink {
+                Text("Settings…")
             }
             Button("Test Device (LED sweep)") {
                 deviceManager.testDevice()

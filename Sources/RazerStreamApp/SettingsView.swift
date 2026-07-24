@@ -31,6 +31,7 @@ struct SettingsView: View {
     @EnvironmentObject var store: ProfileStore
     @EnvironmentObject var deviceManager: DeviceManager
     @AppStorage("appearanceMode") private var appearanceMode = 0
+    @AppStorage("launchInMenuBar") private var launchInMenuBar = false
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var brightness: Double = 8
     @State private var ledBrightness: Double = 10
@@ -64,6 +65,14 @@ struct SettingsView: View {
             }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { LaunchAtLogin.set($1) }
+
+            Section {
+                Toggle("Start in the menu bar", isOn: $launchInMenuBar)
+            } footer: {
+                Text("Launches to the menu bar with no window and no Dock icon; open it any time from the menu bar icon. Takes effect on the next launch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Section {
                 if ActionEngine.hasAccessibility {
