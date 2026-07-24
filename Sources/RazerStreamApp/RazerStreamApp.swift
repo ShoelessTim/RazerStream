@@ -13,8 +13,22 @@ final class AppActions {
     var didHandleLaunch = false
 }
 
+// applicationWillFinishLaunching runs before AppKit shows (and bounces) the
+// Dock icon; setting .accessory here, rather than later once the window
+// mounts, means a menu-bar-only launch never shows a Dock icon to bounce in
+// the first place. Reads the pref straight from UserDefaults since no app
+// state exists yet this early.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if UserDefaults.standard.bool(forKey: "launchInMenuBar") {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+}
+
 @main
 struct RazerStreamApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = ProfileStore()
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var packManager = IconPackManager()
