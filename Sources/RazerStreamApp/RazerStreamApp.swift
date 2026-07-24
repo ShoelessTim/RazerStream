@@ -50,44 +50,23 @@ struct RazerStreamApp: App {
                 .environmentObject(deviceManager)
                 .environmentObject(packManager)
                 .preferredColorScheme(colorScheme)
-                .onAppear {
+                // Runs the once-at-launch setup from inside the window's view
+                // hierarchy, early enough (viewDidMoveToWindow) to order the
+                // window out before it's ever drawn when launching menu-bar
+                // only; that pre-empts the on-screen flash that closing it
+                // after onAppear caused.
+                .background(LaunchConfigurator(hideAtLaunch: launchInMenuBar) {
                     deviceManager.start(store: store)
-                    // Capture a reopen closure for non-SwiftUI callers; always
-                    // promotes back to a normal windowed app, so "Show
-                    // RazerStream" works even when we launched menu-bar-only.
                     AppActions.shared.showMainWindow = {
                         NSApp.setActivationPolicy(.regular)
                         openWindow(id: "main")
-                        NSApp.activate(ignoringOtherApps: true)
-                    }
-
-                    // onAppear also fires on every later reopen; only the very
-                    // first pass is "launch", and only then do we honor the
-                    // start-hidden preference.
-                    if AppActions.shared.didHandleLaunch {
-                        NSApp.setActivationPolicy(.regular)
-                        NSApp.activate(ignoringOtherApps: true)
-                        return
-                    }
-                    AppActions.shared.didHandleLaunch = true
-
-                    if launchInMenuBar {
-                        // Live only in the menu bar: no Dock icon, no app menus,
-                        // and close the window this scene just opened.
-                        NSApp.setActivationPolicy(.accessory)
-                        DispatchQueue.main.async {
-                            NSApp.windows.first {
-                                ($0.identifier?.rawValue.contains("main") ?? false)
-                                    || $0.title == "RazerStream"
-                            }?.close()
+                        if let w = Self.mainWindow {
+                            w.alphaValue = 1   // undo the launch-time hide, if any
+                            w.makeKeyAndOrderFront(nil)
                         }
-                    } else {
-                        // Bare binaries aren't foreground apps by default;
-                        // promote ourselves so the window actually shows.
-                        NSApp.setActivationPolicy(.regular)
                         NSApp.activate(ignoringOtherApps: true)
                     }
-                }
+                })
         }
         .commands {
             CommandMenu("Device") {
@@ -163,8 +142,76 @@ struct RazerStreamApp: App {
                 NSApplication.shared.terminate(nil)
             }
         } label: {
-            // Icon only; the live readout lives in the window status bar
+            // Icon only; the live readout lives in the window status bar.
+            // The MenuBarExtra label is present from the moment the app
+            // launches, whether or not the main window is suppressed, so its
+            // onAppear is the reliable once-at-launch hook: start the device,
+            // wire the reopen closure, and drop the Dock icon when running
+            // menu-bar-only. (The window's own onAppear can't do this job
+            // because a suppressed window never appears.)
             Image(nsImage: DeckIcon.menuBar)
+        }
+    }
+
+    // The main control window, for showMainWindow to force visible after a
+    // menu-bar-only launch left it ordered out.
+    @MainActor
+    static var mainWindow: NSWindow? {
+        NSApp.windows.first {
+            ($0.identifier?.rawValue.contains("main") ?? false) || $0.title == "RazerStream"
+        }
+    }
+}
+
+// Runs once-at-launch setup from inside the window's AppKit view hierarchy.
+// viewDidMoveToWindow fires while the window is being assembled, before it's
+// ordered on screen, so ordering it out there (when launching menu-bar only)
+// pre-empts the draw instead of flashing a window and closing it a runloop
+// later. A plain view with no visible content; it exists only for the hook.
+private struct LaunchConfigurator: NSViewRepresentable {
+    let hideAtLaunch: Bool
+    let onLaunch: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        LaunchConfigView(hideAtLaunch: hideAtLaunch, onLaunch: onLaunch)
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class LaunchConfigView: NSView {
+    private let hideAtLaunch: Bool
+    private let onLaunch: () -> Void
+
+    init(hideAtLaunch: Bool, onLaunch: @escaping () -> Void) {
+        self.hideAtLaunch = hideAtLaunch
+        self.onLaunch = onLaunch
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Only the first window mount is "launch"; a later Show reuses the
+        // same window, so this doesn't fire again and can't re-hide it.
+        guard let window, !AppActions.shared.didHandleLaunch else { return }
+        AppActions.shared.didHandleLaunch = true
+
+        onLaunch()
+
+        if hideAtLaunch {
+            // Menu-bar-only: no Dock icon, and out before it's ever drawn.
+            // alphaValue 0 is belt-and-suspenders: if SwiftUI still orders the
+            // window front after this during its own launch pass, it stays
+            // invisible rather than flashing; showMainWindow restores it to 1.
+            NSApp.setActivationPolicy(.accessory)
+            window.alphaValue = 0
+            window.orderOut(nil)
+        } else {
+            // Bare binaries aren't foreground apps by default; promote so the
+            // window and its menus show.
+            NSApp.setActivationPolicy(.regular)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 }
