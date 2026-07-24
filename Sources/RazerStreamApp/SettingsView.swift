@@ -31,7 +31,7 @@ struct SettingsView: View {
     @EnvironmentObject var store: ProfileStore
     @EnvironmentObject var deviceManager: DeviceManager
     @AppStorage("appearanceMode") private var appearanceMode = 0
-    @AppStorage("launchInMenuBar") private var launchInMenuBar = false
+    @AppStorage("startHidden") private var startHidden = false
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var brightness: Double = 8
     @State private var ledBrightness: Double = 10
@@ -67,9 +67,9 @@ struct SettingsView: View {
                 .onChange(of: launchAtLogin) { LaunchAtLogin.set($1) }
 
             Section {
-                Toggle("Start in the menu bar", isOn: $launchInMenuBar)
+                Toggle("Start hidden (no window on launch)", isOn: $startHidden)
             } footer: {
-                Text("Launches to the menu bar with no window and no Dock icon; open it any time from the menu bar icon. Takes effect on the next launch.")
+                Text("Launches without opening the window; RazerStream keeps running in the background. Open it any time from the Dock icon, the menu bar icon, or Device > Show RazerStream. Takes effect on the next launch.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -13,16 +13,22 @@ final class AppActions {
     var didHandleLaunch = false
 }
 
-// applicationWillFinishLaunching runs before AppKit shows (and bounces) the
-// Dock icon; setting .accessory here, rather than later once the window
-// mounts, means a menu-bar-only launch never shows a Dock icon to bounce in
-// the first place. Reads the pref straight from UserDefaults since no app
-// state exists yet this early.
+// Reopens the control window when the user clicks the Dock icon (or the app
+// menu's Show item) while no window is showing; this is one of the always
+// available escape hatches that makes "Start hidden" impossible to get stuck
+// in. Note what this deliberately does NOT do: it never changes the app's
+// activation policy. An earlier attempt set .accessory to drop the Dock icon
+// for a true menu-bar-only launch, but doing that early enough to avoid a
+// Dock bounce also stopped the menu bar icon (MenuBarExtra / NSStatusItem)
+// from registering, leaving no window AND no menu bar item, i.e. fully locked
+// out. Staying a normal .regular app keeps the Dock icon, the app menus, and
+// the menu bar icon all present, so there is always a way back in.
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationWillFinishLaunching(_ notification: Notification) {
-        if UserDefaults.standard.bool(forKey: "launchInMenuBar") {
-            NSApp.setActivationPolicy(.accessory)
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows {
+            AppActions.shared.showMainWindow?()
         }
+        return true
     }
 }
 
@@ -36,9 +42,11 @@ struct RazerStreamApp: App {
     // 0 = follow system (default), 1 = light, 2 = dark
     @AppStorage("appearanceMode") private var appearanceMode = 0
 
-    // When set, launch straight to the menu bar (no window, no Dock icon)
-    // instead of opening the control window.
-    @AppStorage("launchInMenuBar") private var launchInMenuBar = false
+    // When set, launch without opening the control window; the app still
+    // runs normally (Dock icon, app menus, menu bar icon all present) so it
+    // can be opened any time. New key name deliberately distinct from the
+    // pulled "launchInMenuBar" pref, whose meaning (no Dock icon) changed.
+    @AppStorage("startHidden") private var startHidden = false
 
     init() {
         setbuf(stdout, nil)   // immediate debug output when piped to a file
@@ -66,10 +74,10 @@ struct RazerStreamApp: App {
                 .preferredColorScheme(colorScheme)
                 // Runs the once-at-launch setup from inside the window's view
                 // hierarchy, early enough (viewDidMoveToWindow) to order the
-                // window out before it's ever drawn when launching menu-bar
-                // only; that pre-empts the on-screen flash that closing it
-                // after onAppear caused.
-                .background(LaunchConfigurator(hideAtLaunch: launchInMenuBar) {
+                // window out before it's ever drawn when "Start hidden" is on;
+                // that pre-empts the on-screen flash that closing it after
+                // onAppear caused.
+                .background(LaunchConfigurator(hideAtLaunch: startHidden) {
                     deviceManager.start(store: store)
                     AppActions.shared.showMainWindow = {
                         NSApp.setActivationPolicy(.regular)
@@ -157,18 +165,13 @@ struct RazerStreamApp: App {
             }
         } label: {
             // Icon only; the live readout lives in the window status bar.
-            // The MenuBarExtra label is present from the moment the app
-            // launches, whether or not the main window is suppressed, so its
-            // onAppear is the reliable once-at-launch hook: start the device,
-            // wire the reopen closure, and drop the Dock icon when running
-            // menu-bar-only. (The window's own onAppear can't do this job
-            // because a suppressed window never appears.)
+            // Icon only; the live readout lives in the window status bar.
             Image(nsImage: DeckIcon.menuBar)
         }
     }
 
     // The main control window, for showMainWindow to force visible after a
-    // menu-bar-only launch left it ordered out.
+    // "Start hidden" launch left it ordered out.
     @MainActor
     static var mainWindow: NSWindow? {
         NSApp.windows.first {
@@ -212,18 +215,21 @@ private final class LaunchConfigView: NSView {
 
         onLaunch()
 
+        // Always a normal .regular app: Dock icon, app menus, and menu bar
+        // icon all present so there's always a way to open the window. The
+        // only difference "Start hidden" makes is not showing the window at
+        // launch; the app is never made .accessory (that's what previously
+        // dropped the menu bar icon and caused a lockout).
+        NSApp.setActivationPolicy(.regular)
+
         if hideAtLaunch {
-            // Menu-bar-only: no Dock icon, and out before it's ever drawn.
-            // alphaValue 0 is belt-and-suspenders: if SwiftUI still orders the
-            // window front after this during its own launch pass, it stays
-            // invisible rather than flashing; showMainWindow restores it to 1.
-            NSApp.setActivationPolicy(.accessory)
+            // Order the window out before it's ever drawn (pre-empts the
+            // launch flash). alphaValue 0 is belt-and-suspenders in case
+            // SwiftUI orders it front again during its own launch pass;
+            // showMainWindow restores alpha to 1 when the user opens it.
             window.alphaValue = 0
             window.orderOut(nil)
         } else {
-            // Bare binaries aren't foreground apps by default; promote so the
-            // window and its menus show.
-            NSApp.setActivationPolicy(.regular)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
