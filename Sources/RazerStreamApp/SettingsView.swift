@@ -327,6 +327,7 @@ struct SettingsView: View {
     @State private var exportDocument: ProfileDocument?
     @State private var showExporter = false
     @State private var showImporter = false
+    @State private var showLoupedeckImport = false
     @State private var importFailed = false
 
     private var history: some View {
@@ -360,6 +361,20 @@ struct SettingsView: View {
                 Text("Saves or loads a single profile as a standalone .razerstream file, to share a layout or back one up outside the app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if LoupedeckImport.isAvailable {
+                Section {
+                    Button {
+                        showLoupedeckImport = true
+                    } label: {
+                        Label("Import from Loupedeck…", systemImage: "arrow.down.doc")
+                    }
+                } footer: {
+                    Text("Found profiles saved by the Loupedeck software on this Mac. You will see exactly what carries over, and what needs reassigning, before anything is imported.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -418,6 +433,11 @@ struct SettingsView: View {
             case .failure:
                 importFailed = true
             }
+        }
+        .sheet(isPresented: $showLoupedeckImport) {
+            LoupedeckImportView()
+                .environmentObject(store)
+                .environmentObject(deviceManager)
         }
         .alert("Couldn't Import Profile", isPresented: $importFailed) {
             Button("OK", role: .cancel) {}

@@ -765,6 +765,26 @@ final class ProfileStore: ObservableObject {
         return true
     }
 
+    /// Adds an already-built profile (the Loupedeck importer produces one)
+    /// and switches to it. Always takes a fresh id and a non-colliding name,
+    /// so an import can only ever add; nothing already saved is touched, and
+    /// undoing it is just deleting the new profile.
+    func addImportedProfile(_ incoming: Profile) {
+        var profile = incoming
+        profile.id = UUID()
+        var name = profile.name
+        var n = 2
+        while profiles.contains(where: { $0.name == name }) {
+            name = "\(profile.name) \(n)"
+            n += 1
+        }
+        profile.name = name
+        profiles.append(profile)
+        activeProfileID = profile.id
+        currentPageIndex = 0
+        save()
+    }
+
     // MARK: - App-switching pages
 
     func setAppSwitchingEnabled(_ enabled: Bool) {
