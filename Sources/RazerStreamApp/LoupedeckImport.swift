@@ -113,6 +113,13 @@ enum LoupedeckImport {
         var displayName: String?
         var description: String?
         var templateActionName: String?
+        var actionParameters: ActionParameters?
+    }
+
+    /// Saved parameters for a parameterised action. The inner dictionary also
+    /// carries a `$type` entry, which we ignore; every value is a string.
+    struct ActionParameters: Decodable {
+        var parameters: [String: String]?
     }
 
     // MARK: - Discovery

@@ -29,12 +29,24 @@ extension LoupedeckImport {
         /// No equivalent. The label is kept so the tile still reads correctly
         /// and can be reassigned.
         case unmapped(reason: String)
+        /// Loupedeck's explicit "no action" (`@None`). Not a failure: the
+        /// control was deliberately left blank, so the review step should
+        /// pass over it rather than report it as needing attention.
+        case empty
 
         var action: ControlAction? {
             switch self {
             case .mapped(let a):          return a
             case .approximate(let a, _):  return a
-            case .unmapped:               return nil
+            case .unmapped, .empty:       return nil
+            }
+        }
+
+        /// True when this control should be shown in the review step.
+        var needsAttention: Bool {
+            switch self {
+            case .unmapped, .approximate: return true
+            case .mapped, .empty:         return false
             }
         }
     }
@@ -116,9 +128,15 @@ extension LoupedeckImport {
                                          iconActionKey: action)
 
             case ("@Generic", "@ProfileAction"):
-                // A plugin action with saved parameters; the underlying action
-                // is a plugin call, so there is nothing faithful to map to.
+                // A saved, parameterised action. The common case by far is a
+                // keyboard shortcut, which we can reproduce exactly; anything
+                // else resolves to a plugin call with no equivalent.
                 let cmd = profileCommands[action] ?? p.payload.flatMap { profileCommands[$0] }
+                if let cmd, Self.parts(of: cmd.templateActionName ?? "").verb == "@KeyboardKey" {
+                    return TranslatedControl(label: text,
+                                             mapping: translateKeyboardKey(cmd),
+                                             iconActionKey: action)
+                }
                 let origin = cmd?.templateActionName.map { Self.parts(of: $0).plugin } ?? "a plugin"
                 return TranslatedControl(label: text,
                                          mapping: .unmapped(reason: "Needs the \(origin) plugin"),
@@ -150,11 +168,19 @@ extension LoupedeckImport {
 
         /// A macro is a list of steps. One step becomes a plain action; several
         /// become a sequence, which is what our multi-action macros are for.
-        private func translateMacro(_ macro: MacroCommand) -> Mapping {
+        ///
+        /// Steps can reference other macros, either spelled out as
+        /// `$@Generic___@Macro___<GUID>` or as a bare GUID, so this recurses
+        /// and flattens. `seen` guards against a macro that references itself
+        /// directly or through a cycle, which would otherwise never terminate.
+        private func translateMacro(_ macro: MacroCommand, seen: Set<String> = []) -> Mapping {
             let steps = macro.actions ?? []
             guard !steps.isEmpty else {
                 return .unmapped(reason: "Macro has no steps")
             }
+
+            var visited = seen
+            if let name = macro.name { visited.insert(name) }
 
             var actions: [ControlAction] = []
             var notes: [String] = []
@@ -163,18 +189,45 @@ extension LoupedeckImport {
             for step in steps {
                 let p = Self.parts(of: step)
                 let mapping: Mapping
-                if p.plugin == "@Generic" {
+
+                // A nested macro, either fully qualified or a bare GUID.
+                let nestedKey: String? = {
+                    if p.plugin == "@Generic", p.verb == "@Macro" { return p.payload }
+                    if !step.contains("___"), macros[step] != nil { return step }
+                    return nil
+                }()
+
+                if let key = nestedKey {
+                    if visited.contains(key) {
+                        mapping = .unmapped(reason: "Macro refers to itself")
+                    } else if let nested = macros[key] {
+                        mapping = translateMacro(nested, seen: visited)
+                    } else {
+                        mapping = .unmapped(reason: "Referenced macro not found in profile")
+                    }
+                } else if p.plugin == "@Generic" {
                     mapping = translateGeneric(verb: p.verb, payload: p.payload)
                 } else {
                     mapping = .unmapped(reason: "Needs the \(p.plugin) plugin")
                 }
+
                 switch mapping {
                 case .mapped(let a):
-                    actions.append(a)
+                    // Flatten a nested sequence rather than nesting one inside
+                    // another; play time flattens anyway, and a flat list is
+                    // what the macro editor shows.
+                    if case .sequence(let inner) = a { actions.append(contentsOf: inner.map(\.action)) }
+                    else { actions.append(a) }
                 case .approximate(let a, let note):
-                    actions.append(a); notes.append(note)
+                    if case .sequence(let inner) = a { actions.append(contentsOf: inner.map(\.action)) }
+                    else { actions.append(a) }
+                    notes.append(note)
                 case .unmapped(let reason):
                     failed.append(reason)
+                case .empty:
+                    // An explicitly blank step; contributes nothing and is
+                    // not a failure.
+                    continue
                 }
             }
 
@@ -195,17 +248,58 @@ extension LoupedeckImport {
         /// The `@Generic` plugin is Loupedeck's own built-in set, and the only
         /// family with real equivalents here.
         private func translateGeneric(verb: String, payload: String?) -> Mapping {
+            // Verbs that carry no payload by design, handled before the
+            // has-a-target check below.
+            switch verb {
+            case "@None":
+                return .empty
+            case "@NextTouchPage":
+                return .mapped(.nextPage)
+            case "@PreviousTouchPage":
+                return .mapped(.prevPage)
+            case "@ButtonClock":
+                return .unmapped(reason: "Shows a clock; set the tile's Content to Clock instead")
+            default:
+                break
+            }
+
             guard let payload, !payload.isEmpty else {
                 return .unmapped(reason: "Action has no target")
             }
 
             switch verb {
+            case "@ChangeTouchPage":
+                // "Main|<workspace>|<page>". The target page lives inside a
+                // Loupedeck workspace and its id does not correspond to any
+                // page we create on import, so there is no index to point at.
+                return .unmapped(reason: "Jumps to a specific page; choose the page by hand")
+
+            case let v where v.hasSuffix("DateTimeDynamicAction"):
+                return .unmapped(reason: "Shows the date or time; set the tile's Content to Clock instead")
+
             case "@ExecuteApplication":
                 // Either a URL or an application path.
                 if payload.hasPrefix("http://") || payload.hasPrefix("https://") {
                     return .mapped(.openURL(payload))
                 }
                 return .mapped(.launchApp(path: payload))
+
+            case "@MouseClick":
+                // Payload is a modifier held during the click ("AltLeft",
+                // "ControlLeft"); we can click but cannot hold the modifier,
+                // so this is close rather than exact.
+                return .approximate(.mouseClick,
+                                    note: "Loupedeck held \(Self.humanize(payload)) during the click; the modifier is not carried over")
+
+            case "@MouseClickRight":
+                return .unmapped(reason: "Right click has no equivalent action yet")
+
+            case "@ChangeWorkspace":
+                // "Main|<workspace GUID>". Loupedeck workspaces are a grouping
+                // above pages with no equivalent here, and the target is a
+                // GUID rather than a page index, so there is nothing faithful
+                // to point this at.
+                return .unmapped(reason: "Switches a Loupedeck workspace; pick a page for this by hand")
 
             case let v where v.hasSuffix("PlaySoundDynamicAction"):
                 // ?filePath=<percent encoded>&volume=50
@@ -219,6 +313,79 @@ extension LoupedeckImport {
 
             default:
                 return .unmapped(reason: "Unsupported built-in action")
+            }
+        }
+
+        /// A saved keyboard shortcut. The stored value has four fields
+        /// separated by `___`, of which the third is the Mac rendering:
+        ///
+        ///   ControlOrCommand+Control+Space___4108___Cmd+Ctrl+Space___mac-49#...
+        ///
+        /// so we take that field and rewrite its tokens into the form the
+        /// keystroke engine parses. Anything with a key we cannot press is
+        /// reported rather than silently sent as a different shortcut.
+        private func translateKeyboardKey(_ cmd: ProfileCommand) -> Mapping {
+            guard let raw = cmd.actionParameters?.parameters?["keyboardKey"] else {
+                return .unmapped(reason: "Shortcut has no key recorded")
+            }
+            let fields = raw.components(separatedBy: "___")
+            // Prefer the Mac field; fall back to the portable first field.
+            let combo = fields.count >= 3 ? fields[2] : (fields.first ?? "")
+            guard !combo.isEmpty else {
+                return .unmapped(reason: "Shortcut has no key recorded")
+            }
+
+            var tokens: [String] = []
+            for token in combo.components(separatedBy: "+") {
+                guard let mapped = Self.keyToken(token) else {
+                    return .unmapped(reason: "Uses the \(token) key, which cannot be sent yet")
+                }
+                tokens.append(mapped)
+            }
+            return .mapped(.keystroke(tokens.joined(separator: "+")))
+        }
+
+        /// Loupedeck key names to the names the keystroke engine understands.
+        /// Returns nil for keys with no virtual key code available, so the
+        /// caller can report them instead of substituting something wrong.
+        private static func keyToken(_ token: String) -> String? {
+            switch token.lowercased() {
+            case "cmd", "command":              return "cmd"
+            case "ctrl", "control":             return "ctrl"
+            case "shift":                       return "shift"
+            case "opt", "option", "alt":        return "opt"
+            case "fn":                          return "fn"
+            case "arrowleft":                   return "left"
+            case "arrowright":                  return "right"
+            case "arrowup":                     return "up"
+            case "arrowdown":                   return "down"
+            case "space", "spacebar":           return "space"
+            case "enter", "return":             return "return"
+            case "esc", "escape":               return "escape"
+            case "tab":                         return "tab"
+            case "backspace", "delete":         return "delete"
+            case "comma":                       return ","
+            case "period", "dot":               return "."
+            case "slash":                       return "/"
+            case "backslash":                   return "\\"
+            case "semicolon":                   return ";"
+            case "quote", "apostrophe":         return "'"
+            case "minus", "oemminus":           return "-"
+            case "plus", "equal", "oemplus":    return "="
+            case "backquote", "grave", "oem3":  return "`"
+            // Windows style OEM names still appear in saved Mac shortcuts.
+            case "oem1":                        return ";"
+            case "oem2":                        return "/"
+            case "oem4":                        return "["
+            case "oem5":                        return "\\"
+            case "oem6":                        return "]"
+            case "oem7":                        return "'"
+            default:
+                let t = token.lowercased()
+                // Single letters and digits pass through; so do f1 to f12.
+                if t.count == 1, t.first!.isLetter || t.first!.isNumber { return t }
+                if t.first == "f", Int(t.dropFirst()).map({ (1...12).contains($0) }) == true { return t }
+                return nil
             }
         }
 
