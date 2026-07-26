@@ -14,17 +14,49 @@ struct IconPicker: View {
     @State private var search = ""
     @State private var selectedTab = RecentIcons.items.isEmpty ? "system" : "recent"
 
+    /// Segments get unreadably narrow past about this many in a 520pt sheet,
+    /// so beyond it the same choices become a menu instead. Bundling more
+    /// packs should never make the picker unusable.
+    private static let maxSegments = 4
+
+    @ViewBuilder
+    private var tabPicker: some View {
+        let picker = Picker("", selection: $selectedTab) {
+            Text("Recent").tag("recent")
+            Text("System").tag("system")
+            ForEach(packManager.packs) { pack in
+                Text(pack.name).tag(pack.id)
+            }
+        }
+        .labelsHidden()
+
+        if packManager.packs.count + 2 <= Self.maxSegments {
+            picker.pickerStyle(.segmented)
+        } else {
+            HStack {
+                picker.pickerStyle(.menu).fixedSize()
+                Spacer()
+                Text(tabSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Icon count for the selected pack; useful context once the packs get
+    /// large enough that browsing without searching is impractical.
+    private var tabSubtitle: String {
+        if selectedTab == "recent" { return "\(RecentIcons.items.count) recent" }
+        if selectedTab == "system" { return "\(SymbolPicker.library.count) symbols" }
+        if let pack = packManager.packs.first(where: { $0.id == selectedTab }) {
+            return "\(pack.icons.count) icons"
+        }
+        return ""
+    }
+
     var body: some View {
         VStack(spacing: 10) {
-            Picker("", selection: $selectedTab) {
-                Text("Recent").tag("recent")
-                Text("System").tag("system")
-                ForEach(packManager.packs) { pack in
-                    Text(pack.name).tag(pack.id)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            tabPicker
 
             TextField("Search icons…", text: $search)
                 .textFieldStyle(.roundedBorder)

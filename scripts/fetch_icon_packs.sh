@@ -34,4 +34,33 @@ if [ ! -d "$OUT/Bootstrap" ]; then
     echo "Bootstrap: $(ls "$OUT/Bootstrap" | grep -c '\.svg$') icons"
 fi
 
+# Simple Icons; CC0, brand and service logos. The most useful addition for a
+# stream deck specifically: Discord, Twitch, Spotify, OBS and friends, which
+# the general purpose sets deliberately do not carry.
+if [ ! -d "$OUT/Simple Icons" ]; then
+    echo "Fetching Simple Icons…"
+    curl -sL "https://github.com/simple-icons/simple-icons/archive/refs/heads/master.tar.gz" -o "$TMP/simple.tgz"
+    mkdir -p "$TMP/simple"
+    tar -xzf "$TMP/simple.tgz" -C "$TMP/simple" --strip-components=1
+    mkdir -p "$OUT/Simple Icons"
+    cp "$TMP/simple/icons/"*.svg "$OUT/Simple Icons/"
+    cp "$TMP/simple/LICENSE.md" "$OUT/Simple Icons/LICENSE"
+    echo "Simple Icons: $(ls "$OUT/Simple Icons" | grep -c '\.svg$') icons"
+fi
+
+# Tabler; MIT, a large general purpose outline set. Only the outline weight is
+# taken: the filled weight reuses the same filenames, so both cannot live in
+# one flat pack folder without colliding.
+if [ ! -d "$OUT/Tabler" ]; then
+    echo "Fetching Tabler…"
+    curl -sL "https://github.com/tabler/tabler-icons/archive/refs/heads/main.tar.gz" -o "$TMP/tabler.tgz"
+    mkdir -p "$TMP/tabler"
+    tar -xzf "$TMP/tabler.tgz" -C "$TMP/tabler" --strip-components=1
+    mkdir -p "$OUT/Tabler"
+    cp "$TMP/tabler/icons/outline/"*.svg "$OUT/Tabler/"
+    cp "$TMP/tabler/LICENSE" "$OUT/Tabler/LICENSE"
+    echo "Tabler: $(ls "$OUT/Tabler" | grep -c '\.svg$') icons"
+fi
+
 echo "Icon packs ready in $OUT"
+du -sh "$OUT" 2>/dev/null | awk '{print "Total bundled icon size: " $1}'
