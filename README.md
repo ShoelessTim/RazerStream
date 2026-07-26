@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.5.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.3)**
+**Current release: [v1.6.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.6.1)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -45,20 +45,30 @@ Not affiliated with Razer, Loupedeck, or Logitech.
   input; the status light is never touched, so connection state always
   stays visible
 - Export or import a single profile as a standalone `.razerstream` file
+- Import your existing Loupedeck profiles: pages, labels, and every action with
+  an equivalent here come across, appended to your current profile, with a
+  review step showing exactly what needs reassigning first
 - Profile version history (autosave snapshots) in place of undo/redo
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.5.3
+## What's new in 1.6.1
 
-- **Fixed:** idle dim soft-fail / deck going dead after inactivity. Live
-  tiles no longer flood the serial port while dimmed; brightness and LED
-  pushes respect dim state; LED dim/wake is cancelable.
-- **1.5.2:** mouse scroll knobs.
-- **1.5.1:** pack icons no longer vanish on relaunch.
-- **1.5.0:** multi-action macros.
+- **Import your Loupedeck profiles.** Settings > History > Import from
+  Loupedeck reads the profiles the old software left on your Mac. Pages,
+  tile positions, and labels come across, along with app launches, URLs,
+  keyboard shortcuts, macros, volume, and page navigation. Imported pages
+  are appended to your current profile, and a review step shows what needs
+  reassigning before anything is imported. Plugin actions (Twitch, Spotify,
+  OBS Studio) have no equivalent, so they arrive labelled but unassigned
+  rather than guessed at. Tile artwork does not carry over yet.
+- **1.6.0:** the import engine, and a "Start hidden" launch option.
+- **1.5.3:** idle dim soft-fail fixed; live tiles no longer flood the serial
+  port while dimmed.
+- **1.5.2:** mouse scroll knobs. **1.5.1:** pack icons no longer vanish on
+  relaunch. **1.5.0:** multi-action macros.
 
-Full notes: [release v1.5.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.5.3).
+Full notes: [release v1.6.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.6.1).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -80,7 +90,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.5.3.zip` from the
+1. Download `RazerStream-v1.6.1.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

@@ -92,8 +92,38 @@ forks and sends pull requests; nothing about his workflow changes.
      plumbing beyond what a Settings-panel export/import needed
    - Elgato Stream Deck: .streamDeckProfile is a zip of manifest JSON plus
      button images; map 15-key layouts onto our 12 tiles with a review step
-   - Loupedeck 6.3: import what we can parse from local profile storage so
-     refugees from the dead app keep their muscle memory
+   - [x] Loupedeck: shipped v1.6.1, Settings > History > Import from
+     Loupedeck. Reads the profiles the Loupedeck software leaves in
+     Application Support (this device writes to the "Loupedeck40" folder;
+     confirmed from the service log, which records
+     `Device type: 0x00000400 'Razer Stream Controller'`). The layout class
+     is ProfileLayout20: touchPages are pages of tiles, encoderPages are the
+     6 knobs, and controls are positional so there is no control id to
+     decode. Imported pages append to the current profile by default rather
+     than replacing anything.
+
+     What translates: app launches, URLs, keyboard shortcuts (462 of them
+     across the profiles on the maintainer's Mac; the Mac combo is the third
+     field of the saved value), multi-step and nested macros, volume, page
+     navigation, mouse click and scroll. What cannot: anything belonging to
+     a Loupedeck plugin (Twitch, Spotify, OBS Studio), which arrives
+     labelled but unassigned and is listed in the review step rather than
+     guessed at. Knob rotate macros (@MacroAdjustment) need the
+     macroAdjustments table and are not done.
+
+     Two gotchas worth keeping written down: Loupedeck stores a knob turn as
+     one bidirectional adjustment, so a translated rotate action is only the
+     increase half and must be widened back into a preset pair or the knob
+     works one way only; and `@None` is an explicit "deliberately blank"
+     control, not a failure, so it must not be reported as needing
+     attention.
+
+     Still open: icon extraction from the .ict files (JSON with a base64 PNG
+     inside), and confirming tile ordering against real hardware.
+   - Loupedeck CT and other models: the 7x generation uses a different
+     layout class (ProfileLayout7, with pressPages) which the importer
+     deliberately ignores; ProfileLayout20 profiles from other Loupedeck
+     models do parse, but their control counts differ (a CT page holds 15)
 3. Icon libraries beyond SF Symbols (shipped in v1.1.0)
    - Bundled Lucide (MIT) and Bootstrap Icons (MIT); more packs are a copy
      into scripts/fetch_icon_packs.sh (Tabler, Material Symbols, simple-icons)
