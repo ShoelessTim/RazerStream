@@ -14,10 +14,19 @@ struct LoupedeckImportView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @Environment(\.dismiss) private var dismiss
 
+    /// Where the imported pages should land. Appending is the default: most
+    /// people are migrating onto a deck they have already set up, and adding
+    /// pages leaves everything they have built alone.
+    private enum Destination: Hashable {
+        case appendToCurrent
+        case newProfile
+    }
+
     @State private var found: [LoupedeckImport.Discovered] = []
     @State private var selection: LoupedeckImport.Discovered?
     @State private var result: LoupedeckImport.ImportResult?
     @State private var loadError: String?
+    @State private var destination: Destination = .appendToCurrent
 
     var body: some View {
         VStack(spacing: 0) {
@@ -185,19 +194,38 @@ struct LoupedeckImportView: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack {
-            if let result {
-                Text("Imports as a new profile; your existing profiles are untouched.")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .accessibilityHidden(result.profile.pages.isEmpty)
+        VStack(spacing: 8) {
+            if result != nil {
+                Picker("", selection: $destination) {
+                    Text("Add to \"\(store.activeProfile.name)\"").tag(Destination.appendToCurrent)
+                    Text("Create a new profile").tag(Destination.newProfile)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            Spacer()
-            Button("Cancel") { dismiss() }
-            Button("Import") { commit() }
-                .keyboardShortcut(.defaultAction)
-                .disabled(result == nil)
+            HStack {
+                Text(destinationExplanation)
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button(destination == .appendToCurrent ? "Add Pages" : "Import") { commit() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(result == nil)
+            }
         }
         .padding(12)
+    }
+
+    private var destinationExplanation: String {
+        guard let result else { return "" }
+        let n = result.profile.pages.count
+        let pages = "\(n) page\(n == 1 ? "" : "s")"
+        switch destination {
+        case .appendToCurrent:
+            return "Adds \(pages) after your existing ones; nothing you have now is changed."
+        case .newProfile:
+            return "Creates a separate profile with \(pages); your current profile is untouched."
+        }
     }
 
     // MARK: Actions
@@ -223,12 +251,18 @@ struct LoupedeckImportView: View {
         }
     }
 
-    /// Adds the converted profile alongside the existing ones and switches to
-    /// it. Nothing already saved is modified, so an import can be undone by
-    /// deleting the new profile.
+    /// Either appends the imported pages to the profile in use, or adds the
+    /// whole thing as a separate profile. Both are additive: no existing page
+    /// or profile is modified or removed, and either way the save snapshots a
+    /// version that Settings > History can restore.
     private func commit() {
         guard let result else { return }
-        store.addImportedProfile(result.profile)
+        switch destination {
+        case .appendToCurrent:
+            store.appendPages(result.profile.pages)
+        case .newProfile:
+            store.addImportedProfile(result.profile)
+        }
         deviceManager.pushCurrentPage()
         dismiss()
     }

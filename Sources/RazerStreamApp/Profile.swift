@@ -765,6 +765,27 @@ final class ProfileStore: ObservableObject {
         return true
     }
 
+    /// Appends pages to the active profile, leaving every existing page in
+    /// place; used by the Loupedeck importer so a migration adds to the deck
+    /// someone already has rather than replacing it. Pages take fresh ids so
+    /// they can never collide with existing ones, and the view jumps to the
+    /// first new page. The save snapshots a version, so this is undoable from
+    /// Settings > History.
+    @discardableResult
+    func appendPages(_ pages: [Page]) -> Int {
+        guard !pages.isEmpty else { return currentPageIndex }
+        let firstNewIndex = activeProfile.pages.count
+        updateActive { profile in
+            for page in pages {
+                var copy = page
+                copy.id = UUID()
+                profile.pages.append(copy)
+            }
+        }
+        currentPageIndex = min(firstNewIndex, activeProfile.pages.count - 1)
+        return currentPageIndex
+    }
+
     /// Adds an already-built profile (the Loupedeck importer produces one)
     /// and switches to it. Always takes a fresh id and a non-colliding name,
     /// so an import can only ever add; nothing already saved is touched, and
