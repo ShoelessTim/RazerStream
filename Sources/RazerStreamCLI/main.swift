@@ -1,5 +1,6 @@
 import Foundation
 import RazerStreamKit
+import AppKit
 
 // Unbuffered output so events appear immediately even when piped to a file
 setbuf(stdout, nil)
@@ -24,6 +25,8 @@ case "test-pattern":
     runTestPattern()
 case "version":
     runVersion()
+case "report":
+    runReport()
 case "help", "--help", "-h":
     printHelp()
 default:
@@ -65,6 +68,78 @@ func runMonitor() {
         print("Error: \(error)")
         exit(1)
     }
+}
+
+/// What the device answered during the report's handshake. A small locked box
+/// because the event stream is consumed on a Task while the report is printed
+/// from the main thread.
+private final class HandshakeAnswers: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _firmware: String?
+    private var _serialSeen = false
+
+    var firmware: String? { lock.withLock { _firmware } }
+    var serialSeen: Bool { lock.withLock { _serialSeen } }
+
+    func setFirmware(_ v: String) { lock.withLock { _firmware = v } }
+    func markSerialSeen() { lock.withLock { _serialSeen = true } }
+}
+
+/// Prints the hardware report people paste into a GitHub issue. The report
+/// text itself is built in the kit so the app's "Copy Device Report" button
+/// and this command produce identical output.
+func runReport() {
+    print("# Device report")
+    print()
+    print("Paste the block below into a GitHub issue:")
+    print("https://github.com/ShoelessTim/RazerStream/issues/new?labels=device-report&template=device-report.md")
+    print()
+
+    // The app holds the serial port while it runs, so a handshake here would
+    // block behind it; skip rather than hang. The USB identity, which is the
+    // part that matters for adding a device, does not need the port at all.
+    let appRunning = !NSWorkspace.shared.runningApplications.filter {
+        $0.bundleIdentifier == "org.community.razerstream"
+    }.isEmpty
+
+    var connection = DeviceReport.Connection.none
+    if !appRunning, (try? SerialTransport.findDevice()) != nil {
+        if let (device, events) = try? RazerStreamDevice.connect() {
+            let answers = HandshakeAnswers()
+            let done = DispatchSemaphore(value: 0)
+            let task = Task {
+                for await event in events {
+                    switch event {
+                    case .firmwareVersion(let v): answers.setFirmware(v); done.signal()
+                    case .serialNumber: answers.markSerialSeen()
+                    default: break
+                    }
+                }
+            }
+            _ = done.wait(timeout: .now() + 4)
+            connection = .init(connected: true,
+                               firmware: answers.firmware,
+                               serialNumberSeen: answers.serialSeen)
+            task.cancel()
+            device.close()
+        }
+    }
+
+    print("```")
+    print(DeviceReport.generate(connection: connection), terminator: "")
+    if appRunning {
+        print()
+        print("(RazerStream is running and holds the serial port, so the firmware")
+        print(" line was skipped. Quit it and rerun for that detail.)")
+    }
+    print("```")
+    print()
+    print("Please also say which model it is, and whether the official software")
+    print("still drives it on this Mac.")
+
+    // The serial read runs on its own Thread, which would otherwise keep the
+    // process alive after the report is printed.
+    exit(0)
 }
 
 func runList() {

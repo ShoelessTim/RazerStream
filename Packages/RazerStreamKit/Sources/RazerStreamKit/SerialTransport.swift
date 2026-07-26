@@ -50,6 +50,107 @@ public final class SerialTransport {
         )
     }
 
+    /// A USB serial device seen on this Mac, whether or not it is one we know
+    /// how to drive.
+    public struct DiscoveredDevice: Sendable, Equatable {
+        public let path: String
+        public let vendorID: UInt16?
+        public let productID: UInt16?
+        public let product: String?
+        public let manufacturer: String?
+
+        /// True when this is a device the app already supports.
+        public var isKnown: Bool {
+            vendorID == RazerStreamController.vendorID
+                && (productID == RazerStreamController.productID
+                    || productID == RazerStreamController.productIDX)
+        }
+
+        public var idString: String {
+            let v = vendorID.map { String(format: "0x%04X", $0) } ?? "?"
+            let p = productID.map { String(format: "0x%04X", $0) } ?? "?"
+            return "VID=\(v) PID=\(p)"
+        }
+    }
+
+    /// Every USB serial device attached, with whatever identity the IORegistry
+    /// exposes. Deliberately unfiltered: the point is to see hardware we do
+    /// NOT yet recognise, so an owner of a different Loupedeck or Razer model
+    /// can report what their device actually identifies as.
+    public static func enumerateSerialDevices() -> [DiscoveredDevice] {
+        let matchingDict = IOServiceMatching(kIOSerialBSDServiceValue)
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matchingDict, &iterator) == KERN_SUCCESS
+        else { return [] }
+        defer { IOObjectRelease(iterator) }
+
+        var out: [DiscoveredDevice] = []
+        while case let service = IOIteratorNext(iterator), service != IO_OBJECT_NULL {
+            defer { IOObjectRelease(service) }
+            guard let path = serialBSDPath(for: service) else { continue }
+            let ids = usbIdentity(for: service)
+            out.append(DiscoveredDevice(path: path,
+                                        vendorID: ids.vid,
+                                        productID: ids.pid,
+                                        product: ids.product,
+                                        manufacturer: ids.manufacturer))
+        }
+        return out
+    }
+
+    /// Walks up the IORegistry from a serial service, collecting each piece of
+    /// identity from wherever it first appears.
+    ///
+    /// Each field is gathered independently and the walk continues to the top
+    /// rather than stopping at the first node that has an id. A USB interface
+    /// node carries idVendor and idProduct, but the human readable product and
+    /// vendor strings live on the device node above it, so returning early
+    /// finds the numbers and misses the names; that is exactly the detail that
+    /// tells us an unrecognised device calls itself "Loupedeck CT".
+    private static func usbIdentity(for service: io_object_t)
+        -> (vid: UInt16?, pid: UInt16?, product: String?, manufacturer: String?) {
+        var vid: UInt16?
+        var pid: UInt16?
+        var product: String?
+        var manufacturer: String?
+
+        var parent: io_object_t = IO_OBJECT_NULL
+        var current = service
+        IOObjectRetain(current)
+        defer { IOObjectRelease(current) }
+
+        while true {
+            if vid == nil, let v = ioRegistryInteger(service: current, key: "idVendor") {
+                vid = UInt16(truncatingIfNeeded: v)
+            }
+            if pid == nil, let p = ioRegistryInteger(service: current, key: "idProduct") {
+                pid = UInt16(truncatingIfNeeded: p)
+            }
+            if product == nil {
+                product = ioRegistryString(service: current, key: "USB Product Name")
+                    ?? ioRegistryString(service: current, key: "kUSBProductString")
+            }
+            if manufacturer == nil {
+                manufacturer = ioRegistryString(service: current, key: "USB Vendor Name")
+                    ?? ioRegistryString(service: current, key: "kUSBVendorString")
+            }
+
+            if vid != nil, pid != nil, product != nil, manufacturer != nil { break }
+
+            guard IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent) == KERN_SUCCESS,
+                  parent != IO_OBJECT_NULL else { break }
+            IOObjectRelease(current)
+            current = parent
+        }
+        return (vid, pid, product, manufacturer)
+    }
+
+    private static func ioRegistryString(service: io_object_t, key: String) -> String? {
+        guard let value = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() else { return nil }
+        return value as? String
+    }
+
     /// Returns all connected /dev/cu.* paths that match any Razer Stream Controller PID.
     public static func listDevices() throws -> [String] {
         var paths: [String] = []

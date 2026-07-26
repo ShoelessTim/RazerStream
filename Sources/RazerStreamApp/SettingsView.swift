@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
     @State private var idleDimmingEnabled = IdleDimming.isEnabled
     @State private var idleDimmingMinutes = IdleDimming.minutes
+    @State private var reportCopied = false
 
     var body: some View {
         TabView {
@@ -180,6 +181,30 @@ struct SettingsView: View {
                     Label("Test Device (LED sweep)", systemImage: "wand.and.rays")
                 }
                 .disabled(!deviceManager.connected)
+            }
+
+            Section {
+                Button {
+                    let report = DeviceReport.generate(connection: .init(
+                        connected: deviceManager.connected,
+                        firmware: deviceManager.connected ? deviceManager.firmware : nil,
+                        serialNumberSeen: deviceManager.serial != "—"))
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(report, forType: .string)
+                    reportCopied = true
+                } label: {
+                    Label(reportCopied ? "Copied; paste it into the issue"
+                                       : "Copy Device Report",
+                          systemImage: reportCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                }
+                Link("Open a device report issue…",
+                     destination: URL(string: "https://github.com/ShoelessTim/RazerStream/issues/new?labels=device-report&template=device-report.md")!)
+            } header: {
+                Text("Help support more devices")
+            } footer: {
+                Text("If you have a Loupedeck or Razer deck this app does not drive yet, this copies what it identifies itself as over USB. Hardware details only; no profiles, files, or personal data, so it is safe to paste publicly.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
