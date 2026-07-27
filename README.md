@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.6.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.6.1)**
+**Current release: [v1.7.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.0)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -20,8 +20,9 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Full control of all 12 touchscreen tiles, 6 rotary encoders (turn and
   press), and the 8 physical buttons with color LEDs
 - Draw labels, colors, SF Symbols icons, or custom images to any tile or knob;
-  a searchable icon library (SF Symbols, bundled Lucide/Bootstrap packs, your
-  own folders of PNG/SVG files) with a Recent tab
+  a searchable icon library of 12,387 bundled icons (SF Symbols, plus Lucide,
+  Bootstrap, Tabler, and Simple Icons for brand logos), your own folders of
+  PNG/SVG files, and a Recent tab
 - Behavior modes per control: tap, toggle (stateful, like play/pause),
   momentary (hold), and shift (hold to reveal another page)
 - Actions: open app, open URL, shell command, AppleScript, recorded keystroke,
@@ -48,27 +49,28 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Import your existing Loupedeck profiles: pages, labels, and every action with
   an equivalent here come across, appended to your current profile, with a
   review step showing exactly what needs reassigning first
+- Copy a device report (Settings > Device) if you own a deck this app does not
+  drive yet, so support for it can be added
 - Profile version history (autosave snapshots) in place of undo/redo
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.6.1
+## What's new in 1.7.0
+
+This is the V2 release; the roadmap's V2 scope is complete.
 
 - **Import your Loupedeck profiles.** Settings > History > Import from
-  Loupedeck reads the profiles the old software left on your Mac. Pages,
-  tile positions, and labels come across, along with app launches, URLs,
-  keyboard shortcuts, macros, volume, and page navigation. Imported pages
-  are appended to your current profile, and a review step shows what needs
-  reassigning before anything is imported. Plugin actions (Twitch, Spotify,
-  OBS Studio) have no equivalent, so they arrive labelled but unassigned
-  rather than guessed at. Tile artwork does not carry over yet.
-- **1.6.0:** the import engine, and a "Start hidden" launch option.
-- **1.5.3:** idle dim soft-fail fixed; live tiles no longer flood the serial
-  port while dimmed.
-- **1.5.2:** mouse scroll knobs. **1.5.1:** pack icons no longer vanish on
-  relaunch. **1.5.0:** multi-action macros.
+  Loupedeck. Pages, positions, labels, app launches, URLs, keyboard
+  shortcuts, macros, volume, and page navigation come across, appended to
+  your current profile, with a review step for anything that needs
+  reassigning. Plugin actions (Twitch, Spotify, OBS Studio) arrive labelled
+  but unassigned rather than guessed at.
+- **12,387 bundled icons**, adding Simple Icons (brand logos) and Tabler.
+- **Device reports** so owners of unsupported Loupedeck and Razer decks can
+  contribute what is needed to add them.
+- **1.6.x:** the import engine, and a "Start hidden" launch option.
 
-Full notes: [release v1.6.1](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.6.1).
+Full notes: [release v1.7.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.0).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -90,7 +92,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.6.1.zip` from the
+1. Download `RazerStream-v1.7.0.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by
@@ -117,6 +119,7 @@ There is also a small CLI for poking at the hardware:
 swift run rstream monitor        # print every button, knob, and touch event
 swift run rstream test-pattern   # draw a color test to the screen
 swift run rstream brightness 7
+swift run rstream report         # hardware report for a device-support issue
 ```
 
 ## Project layout

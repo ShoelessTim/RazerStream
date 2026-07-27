@@ -124,7 +124,11 @@ forks and sends pull requests; nothing about his workflow changes.
      layout class (ProfileLayout7, with pressPages) which the importer
      deliberately ignores; ProfileLayout20 profiles from other Loupedeck
      models do parse, but their control counts differ (a CT page holds 15)
-3. Icon libraries beyond SF Symbols (shipped in v1.1.0)
+3. Icon libraries beyond SF Symbols (shipped in v1.1.0; expanded v1.7.0 to
+   12,387 icons by adding Simple Icons for brand logos and Tabler. The picker
+   switches from segmented tabs to a menu past four packs, so further packs
+   cannot make it unusable. Measured at the time: +9.4 MB on the distributable
+   zip, and no launch regression at 0.75s with everything scanned.)
    - Bundled Lucide (MIT) and Bootstrap Icons (MIT); more packs are a copy
      into scripts/fetch_icon_packs.sh (Tabler, Material Symbols, simple-icons)
    - User icon packs: point the app at any folder of PNG/SVG files and it
@@ -269,6 +273,32 @@ forks and sends pull requests; nothing about his workflow changes.
      installed" — worth keeping in mind for the open uninstall-coexistence
      question above; may not be a RazerStream-side fix at all if it's
      Logi Options+ actively interfering rather than just port contention.
+
+## Device reports (shipped v1.7.0)
+
+Adding a device needs its USB identity, which only someone holding that
+hardware can supply. `SerialTransport.enumerateSerialDevices()` lists every
+USB serial device unfiltered, deliberately: `findDevice` only matches known
+VID/PID pairs, so an unsupported deck was previously invisible to us, which
+is exactly the case that matters. `DeviceReport.generate()` builds the
+pasteable text and lives in the kit so the app button and `rstream report`
+cannot drift apart.
+
+Reachable from Settings > Device > Copy Device Report (no Terminal, which is
+how most people install this) and from the CLI for source builds, with a
+device-report issue template.
+
+Hardware facts only: USB ids, product strings, macOS version, and firmware
+when a supported device is connected. No profile contents, no file paths,
+and the serial number is reported as seen rather than by value, so it is
+safe to paste publicly. The template explicitly does not ask for profile
+files, since those carry the user's shortcuts and URLs.
+
+Worth remembering: walking the IORegistry up from the serial node and
+stopping at the first `idVendor` finds the numbers but never the names,
+because a USB interface node carries the ids while the readable strings live
+on the device node above it. Collect each field independently and keep
+walking.
 
 ## Track 5: Other platforms (community owned)
 
