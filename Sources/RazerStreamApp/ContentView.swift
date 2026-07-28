@@ -670,6 +670,7 @@ struct ActionEditor: View {
         case mouseScrollLeft = "Scroll Left"
         case mouseScrollRight = "Scroll Right"
         case mouseClick = "Mouse Click"
+        case systemFeature = "macOS Feature"
         case gotoPage = "Go to Page"
         case nextPage = "Next Page"
         case prevPage = "Previous Page"
@@ -679,6 +680,7 @@ struct ActionEditor: View {
     @State private var kind: Kind = .none
     @State private var param: String = ""
     @State private var pageIndex: Int = 0
+    @State private var feature: SystemFeature = .screenshotSelection
     @State private var macroSteps: [MacroStep] = []
 
     private var availableKinds: [Kind] {
@@ -734,6 +736,25 @@ struct ActionEditor: View {
                 }
                 .labelsHidden()
                 .onChange(of: pageIndex) { syncOut() }
+            case .systemFeature:
+                // Grouped, because a flat list of twenty is hard to scan.
+                Picker("", selection: $feature) {
+                    ForEach(SystemFeature.groups, id: \.self) { group in
+                        Section(group) {
+                            ForEach(SystemFeature.allCases.filter { $0.group == group },
+                                    id: \.self) { f in
+                                Text(f.displayName).tag(f)
+                            }
+                        }
+                    }
+                }
+                .labelsHidden()
+                .onChange(of: feature) { syncOut() }
+                if let caveat = feature.caveat {
+                    Text(caveat)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             default:
                 EmptyView()
             }
@@ -777,6 +798,7 @@ struct ActionEditor: View {
         case .mouseScrollLeft:     kind = .mouseScrollLeft
         case .mouseScrollRight:    kind = .mouseScrollRight
         case .mouseClick:          kind = .mouseClick
+        case .systemFeature(let f): kind = .systemFeature; feature = f
         case .gotoPage(let p):     kind = .gotoPage;   pageIndex = p
         case .nextPage:            kind = .nextPage
         case .prevPage:            kind = .prevPage
@@ -810,6 +832,7 @@ struct ActionEditor: View {
         case .mouseScrollLeft:  action = .mouseScrollLeft
         case .mouseScrollRight: action = .mouseScrollRight
         case .mouseClick:       action = .mouseClick
+        case .systemFeature:    action = .systemFeature(feature)
         case .gotoPage:   action = .gotoPage(pageIndex)
         case .nextPage:   action = .nextPage
         case .prevPage:   action = .prevPage

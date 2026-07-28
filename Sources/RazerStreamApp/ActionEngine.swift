@@ -207,6 +207,9 @@ enum ActionEngine {
         case .mouseClick:
             sendMouseClick()
 
+        case .systemFeature(let feature):
+            perform(feature)
+
         case .gotoPage(let p): pageHandler(.goto(p))
         case .nextPage:        pageHandler(.next)
         case .prevPage:        pageHandler(.prev)
@@ -224,6 +227,36 @@ enum ActionEngine {
             DispatchQueue.main.async {
                 AppActions.shared.showMainWindow?()
             }
+        }
+    }
+
+    /// Carries out a named macOS feature. Keystroke-backed ones go through the
+    /// same path as any other shortcut, so they run the user's own system
+    /// behaviour and settings rather than a parallel implementation.
+    private static func perform(_ feature: SystemFeature) {
+        switch feature.mechanism {
+        case .keystroke(let combo):
+            sendKeystroke(combo)
+
+        case .keystrokeThen(let first, let second):
+            sendKeystroke(first)
+            // Selection mode needs a moment to come up before Space switches
+            // it to window capture.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                sendKeystroke(second)
+            }
+
+        case .mediaKey(let key):
+            sendMediaKey(key)
+
+        case .shell(let command):
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            task.arguments = ["-c", command]
+            try? task.run()
+
+        case .appleScript(let source):
+            runAppleScript(source)
         }
     }
 

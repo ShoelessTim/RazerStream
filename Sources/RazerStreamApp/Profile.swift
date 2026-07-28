@@ -57,6 +57,7 @@ enum ControlAction: Codable, Equatable {
     case mouseScrollLeft
     case mouseScrollRight
     case mouseClick                   // left click at the current cursor position
+    case systemFeature(SystemFeature) // named macOS features; see SystemFeature.swift
     case gotoPage(Int)                // jump to page index
     case nextPage
     case prevPage
@@ -91,6 +92,7 @@ enum ControlAction: Codable, Equatable {
         case .mouseScrollLeft:      return "Scroll Left"
         case .mouseScrollRight:     return "Scroll Right"
         case .mouseClick:           return "Mouse Click"
+        case .systemFeature(let f): return f.displayName
         case .gotoPage(let p):      return "Go to page \(p + 1)"
         case .nextPage:             return "Next page"
         case .prevPage:             return "Previous page"

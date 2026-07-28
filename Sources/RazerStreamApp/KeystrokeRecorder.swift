@@ -8,8 +8,11 @@ struct KeystrokeRecorder: View {
     @Binding var combo: String
     @State private var recording = false
     @State private var monitor: Any?
+    @State private var typed = ""
+    @State private var typedProblem: String?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
         HStack(spacing: 8) {
             Button {
                 recording ? stopRecording() : startRecording()
@@ -46,6 +49,57 @@ struct KeystrokeRecorder: View {
             }
         }
         .onDisappear { stopRecording() }
+
+        // Recording physically cannot capture a shortcut macOS has claimed for
+        // itself: the window server handles Cmd+Shift+4 and friends before the
+        // event ever reaches this app, so pressing it here takes a screenshot
+        // instead of recording. Typing it is the way in for those. Sending
+        // them works fine; only capture is blocked.
+        DisclosureGroup("Type it instead") {
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("cmd+shift+4", text: $typed)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(applyTyped)
+                HStack {
+                    Text(typedProblem ?? "Modifiers: cmd, shift, alt, ctrl, fn")
+                        .font(.caption)
+                        .foregroundStyle(typedProblem == nil ? Color.secondary : Color.red)
+                    Spacer()
+                    Button("Use", action: applyTyped)
+                        .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                Text("For macOS's own shortcuts, the macOS Feature action has them ready made.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+        }
+        .font(.caption)
+        }
+    }
+
+    /// Validates a typed combo against the same table the keystroke engine
+    /// uses, so a bad key is caught here rather than silently doing nothing
+    /// when the control is pressed.
+    private func applyTyped() {
+        let raw = typed.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !raw.isEmpty else { return }
+        let modifiers: Set<String> = ["cmd", "command", "shift", "alt", "opt", "option", "ctrl", "control", "fn"]
+        var key = ""
+        for part in raw.split(separator: "+").map(String.init) where !modifiers.contains(part) {
+            key = part
+        }
+        guard !key.isEmpty else {
+            typedProblem = "Needs a key, not just modifiers"
+            return
+        }
+        guard ActionEngine.keyCodes[key] != nil else {
+            typedProblem = "Unknown key \"\(key)\""
+            return
+        }
+        typedProblem = nil
+        combo = raw
+        typed = ""
     }
 
     // MARK: - Recording
