@@ -394,6 +394,21 @@ final class DeviceManager: ObservableObject {
         }
     }
 
+    /// Lights one physical button immediately, for previewing a colour while
+    /// the user is choosing it. Uses the same effective scale as every other
+    /// LED write, so the preview matches what the button will actually look
+    /// like once applied, including while idle-dimmed, rather than showing
+    /// the raw picked colour.
+    ///
+    /// A single SET_COLOR is 4 bytes of payload, unlike a 16 KB framebuffer,
+    /// so this is safe to fire on every change without the pacing the tile
+    /// pushes need. Index 0 is the status light and is never written.
+    func previewButtonLED(_ index: Int, hex: String) {
+        guard let device, index > 0 else { return }
+        let (r, g, b) = Self.scaledRGB(fromHex: hex, scale: effectiveLEDScale)
+        try? device.send(.setButtonColor(button: 7 + index, r: r, g: g, b: b))
+    }
+
     /// Redraw a single tile (used when a toggle flips state, or a live tile
     /// refreshes).
     private func pushTile(_ index: Int) {

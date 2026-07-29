@@ -1334,7 +1334,7 @@ struct ButtonInspector: View {
     @State private var action: ControlAction = .none
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
-    @State private var ledColor = Color.black
+    @State private var ledHex = "000000"
 
     private var isStatusLight: Bool { buttonIndex == 0 }
 
@@ -1349,7 +1349,7 @@ struct ButtonInspector: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    ColorPicker("LED color", selection: $ledColor, supportsOpacity: false)
+                    LEDColorPicker(hex: $ledHex, buttonIndex: buttonIndex)
                 }
             }
             Button("Apply") { apply() }
@@ -1357,8 +1357,16 @@ struct ButtonInspector: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: loadCurrent)
-        .onChange(of: buttonIndex) { loadCurrent() }
+        .onChange(of: buttonIndex) { previous, _ in
+            // Previewing lights the real button without saving anything, so
+            // leaving a button without applying has to put its stored colour
+            // back; otherwise the deck keeps showing a colour the profile
+            // does not have.
+            restoreStoredLED(for: previous)
+            loadCurrent()
+        }
         .onChange(of: store.currentPageIndex) { loadCurrent() }
+        .onDisappear { restoreStoredLED(for: buttonIndex) }
     }
 
     private func loadCurrent() {
@@ -1366,7 +1374,15 @@ struct ButtonInspector: View {
         action = button.action
         releaseAction = button.releaseAction
         mode = button.mode
-        ledColor = Color(hex: button.ledHex)
+        ledHex = button.ledHex
+    }
+
+    /// Re-lights a button from what is actually saved, undoing any preview.
+    private func restoreStoredLED(for index: Int) {
+        guard index > 0, store.currentPage.buttons.indices.contains(index) else { return }
+        let stored = store.currentPage.buttons[index].ledHex
+        guard stored != ledHex else { return }
+        deviceManager.previewButtonLED(index, hex: stored)
     }
 
     private func apply() {
@@ -1375,7 +1391,7 @@ struct ButtonInspector: View {
                 action: action,
                 releaseAction: releaseAction,
                 mode: mode,
-                ledHex: isStatusLight ? "000000" : ledColor.hexString
+                ledHex: isStatusLight ? "000000" : ledHex
             )
         }
         deviceManager.pushCurrentPage()

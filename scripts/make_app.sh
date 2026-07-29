@@ -46,8 +46,8 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <key>CFBundleName</key>                <string>RazerStream</string>
     <key>CFBundleDisplayName</key>         <string>RazerStream</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
-    <key>CFBundleShortVersionString</key>  <string>1.7.1</string>
-    <key>CFBundleVersion</key>             <string>28</string>
+    <key>CFBundleShortVersionString</key>  <string>1.7.2</string>
+    <key>CFBundleVersion</key>             <string>29</string>
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
     <key>CFBundleIconFile</key>            <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>     <true/>
