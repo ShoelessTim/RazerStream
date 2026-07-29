@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.7.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.0)**
+**Current release: [v1.7.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.2)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -25,10 +25,17 @@ Not affiliated with Razer, Loupedeck, or Logitech.
   PNG/SVG files, and a Recent tab
 - Behavior modes per control: tap, toggle (stateful, like play/pause),
   momentary (hold), and shift (hold to reveal another page)
-- Actions: open app, open URL, shell command, AppleScript, recorded keystroke,
-  media keys, volume with the native on-screen HUD, screen brightness, button
-  LED brightness, page navigation, show the app window, and **macros** (ordered
-  multi-step sequences with optional delays between steps)
+- Actions: open app, open URL, shell command, AppleScript, keystroke (record it
+  or build it from modifiers plus a key), media keys, volume with the native
+  on-screen HUD, screen brightness, button LED brightness, page navigation,
+  show the app window, and **macros** (ordered multi-step sequences with
+  optional delays between steps)
+- **macOS features** ready to assign: screenshots (selection, screen, window,
+  to clipboard), Mission Control, App Windows, Spotlight, Launchpad, Mac
+  display brightness, keyboard backlight, lock screen, screen saver, sleep
+  display, force quit, empty trash, and dark mode
+- Button LED colours with named presets and an explicit Off; the physical
+  button lights up as you pick, at the brightness it will really be
 - Knob rotation presets: Volume, Screen Brightness, Button LED Brightness,
   Screen + LED Brightness, Page Navigation, Track skip, and Mouse Scroll
   (vertical or horizontal) are each a single choice instead of hand-wiring
@@ -55,22 +62,20 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.7.0
+## What's new in 1.7.2
 
-This is the V2 release; the roadmap's V2 scope is complete.
+- **macOS features on a tile:** 19 system actions including screenshots,
+  Mission Control, Spotlight, lock screen, and dark mode.
+- **Shortcuts you could not assign before.** Recording can never capture
+  macOS's own shortcuts (pressing Cmd+Shift+4 takes a screenshot instead), so
+  there is now a builder: toggle modifiers, pick a key. It only offers keys
+  the app can actually send.
+- **LED colours you can see:** named presets, an explicit Off, and the real
+  button lights up as you pick.
+- **1.7.0 was the V2 release:** Loupedeck profile import, 12,387 bundled
+  icons, and device reports for unsupported decks.
 
-- **Import your Loupedeck profiles.** Settings > History > Import from
-  Loupedeck. Pages, positions, labels, app launches, URLs, keyboard
-  shortcuts, macros, volume, and page navigation come across, appended to
-  your current profile, with a review step for anything that needs
-  reassigning. Plugin actions (Twitch, Spotify, OBS Studio) arrive labelled
-  but unassigned rather than guessed at.
-- **12,387 bundled icons**, adding Simple Icons (brand logos) and Tabler.
-- **Device reports** so owners of unsupported Loupedeck and Razer decks can
-  contribute what is needed to add them.
-- **1.6.x:** the import engine, and a "Start hidden" launch option.
-
-Full notes: [release v1.7.0](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.0).
+Full notes: [release v1.7.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.2).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -92,7 +97,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.7.0.zip` from the
+1. Download `RazerStream-v1.7.2.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

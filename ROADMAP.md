@@ -300,6 +300,30 @@ because a USB interface node carries the ids while the readable strings live
 on the device node above it. Collect each field independently and keep
 walking.
 
+## macOS system features and shortcut entry (shipped v1.7.1/1.7.2)
+
+A `.systemFeature` ControlAction carrying 19 named macOS features
+(screenshots, Mission Control, Spotlight, Launchpad, Mac display brightness,
+keyboard backlight, lock screen, screen saver, sleep display, force quit,
+empty trash, dark mode). Where macOS has a real shortcut, the feature sends
+that shortcut rather than reimplementing the behaviour, so screenshots honour
+the user's own save location and format.
+
+Worth writing down, because it looks like a bug and is not: the shortcut
+recorder can never capture macOS's own shortcuts. `NSEvent
+.addLocalMonitorForEvents` only sees events delivered to this app, and the
+window server claims Cmd+Shift+4 and friends first, so pressing one while
+recording takes a screenshot instead. Sending them has always worked; only
+capture is blocked. Hence both the curated feature list and a builder
+(modifier toggles plus a grouped key menu) whose key list is derived from
+`ActionEngine.keyCodes`, so it cannot offer a key the engine has no code for.
+
+The button LED picker gained named saturated presets, an explicit Off, and a
+live preview that lights the real button through `previewButtonLED`, scaled
+by the same effective LED brightness as every other write so the preview is
+honest. Preview saves nothing; leaving a button without applying restores its
+stored colour.
+
 ## Track 5: Other platforms (community owned)
 
 Tim has no appetite to build these himself; the project is structured so
