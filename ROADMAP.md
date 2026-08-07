@@ -324,6 +324,101 @@ by the same effective LED brightness as every other write so the preview is
 honest. Preview saves nothing; leaving a button without applying restores its
 stored colour.
 
+## Plan: Command tiles (a tile that shows your own script's output)
+
+Status: planned, not built. Written up 2026-07-27 after a "can a button run a
+job and show its progress" question.
+
+### The decision, and why
+
+Three shapes were considered for getting a user's own data onto a tile:
+
+1. **Command tile.** The tile runs a shell command every N seconds and draws
+   the output.
+2. **File watch tile.** The tile watches a file and redraws when it changes.
+3. **Full plugin API.** External processes draw whatever they like to tiles
+   and knobs (the Track 4 item 10 request from the Jellyfin user).
+
+Command tile wins, because it contains option 2: a command tile can run
+`cat /tmp/job.progress`, but a file watch tile cannot run
+`docker ps | wc -l`. Same amount of work, strictly more capability. It is
+also the pattern people already know from Stream Deck and BetterTouchTool,
+and it reuses the live tile machinery the clock, CPU/RAM, and disk tiles
+already share.
+
+File watching stays worth adding later as an optimisation for the specific
+"watch this one file" case, where it avoids a process spawn and updates
+instantly. It is not a reason to delay this.
+
+The plugin API remains the real answer for high frame rate custom drawing,
+and stays deferred alongside animated tiles; it needs its own design pass.
+
+### What it looks like to use
+
+Tap-to-run and show-progress already compose, because a tile's action and its
+live content are independent today. So:
+
+- Tile **action**: `Shell command`, running the job. Nothing new needed.
+- Tile **content**: `Command`, polling for progress.
+
+The job writes its own progress somewhere:
+
+```sh
+# in the user's script
+echo 47 > /tmp/job.progress
+```
+
+and the tile's content command reads it:
+
+```sh
+cat /tmp/job.progress
+```
+
+Output handling:
+
+- A bare number 0 to 100 draws as a progress bar (tiles) or pie (knob strips),
+  reusing `drawMeterBar` and `drawPieChart`.
+- A number with a trailing `%` behaves the same.
+- Anything else draws as text, truncated to fit.
+- Empty output or a failure draws the tile's normal label, so a broken command
+  degrades to a plain tile rather than a blank one.
+
+### What gets built
+
+- `LiveContent.command` plus two fields on TileConfig/KnobConfig: the command
+  string and a refresh interval. Tolerant decoding as always, so older
+  profiles keep loading.
+- A runner: `Process` on `/bin/zsh -c`, capturing stdout.
+- Rendering: parse stdout, then bar/pie/text as above.
+- Inspector UI: a command field and an interval picker, appearing when Content
+  is set to Command, matching how the Disk Space volume picker appears.
+
+### Safety rules, learned the hard way
+
+These are not optional; v1.5.3 was a fix for exactly this class of bug.
+
+- **Never overlap runs.** If the previous run has not finished, skip this tick
+  rather than stacking processes.
+- **Hard timeout** (about 3 seconds), then kill. A hanging command must not
+  wedge the refresh loop.
+- **Do not run while idle dimmed**, same as the other live tiles; that was the
+  serial flood that made the deck go dead.
+- **Floor the interval** at 1 second, default 5. Progress bars do not need
+  sub-second granularity, and each redraw is a 16 KB framebuffer write.
+- Only poll tiles on the **current page**, as the existing live tiles do.
+
+### What it deliberately does not do
+
+- Not a plugin API. No custom image drawing, no two way data, no high frame
+  rate; see Track 4 item 10.
+- No new security surface: it runs the user's own command, exactly as the
+  existing Shell Command action already does.
+
+### Effort
+
+About a day. The live tile timer, the renderer primitives, and the inspector
+pattern all already exist; this is mostly wiring plus the safety rules above.
+
 ## Track 5: Other platforms (community owned)
 
 Tim has no appetite to build these himself; the project is structured so
