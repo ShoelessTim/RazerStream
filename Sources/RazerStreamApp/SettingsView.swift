@@ -354,9 +354,46 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var showLoupedeckImport = false
     @State private var importFailed = false
+    @State private var pendingImport: Profile?
+    @State private var profileToDelete: UUID?
 
     private var history: some View {
         Form {
+            if store.profiles.count > 1 {
+                Section {
+                    ForEach(store.profiles) { profile in
+                        LabeledContent {
+                            HStack(spacing: 12) {
+                                if profile.id == store.activeProfile.id {
+                                    Text("Active").font(.caption).foregroundStyle(.secondary)
+                                } else {
+                                    Button("Switch To") {
+                                        store.switchProfile(to: profile.id)
+                                        deviceManager.pushCurrentPage()
+                                    }
+                                    .font(.caption)
+                                }
+                                Button {
+                                    profileToDelete = profile.id
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(store.profiles.count < 2)
+                            }
+                        } label: {
+                            Text("\(profile.name) (\(profile.pages.count) page\(profile.pages.count == 1 ? "" : "s"))")
+                        }
+                    }
+                } header: {
+                    Text("Profiles")
+                } footer: {
+                    Text("A profile is a whole separate set of pages. Only one is live on the deck at a time, and the page knob moves within it, so a second profile is only reachable from here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 Button {
                     store.duplicateProfile(store.activeProfile.id)
@@ -450,14 +487,44 @@ struct SettingsView: View {
             case .success(let url):
                 let accessed = url.startAccessingSecurityScopedResource()
                 defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                if let data = try? Data(contentsOf: url) {
-                    importFailed = !store.importProfile(from: data)
+                if let data = try? Data(contentsOf: url),
+                   let profile = store.decodeProfile(from: data) {
+                    pendingImport = profile
                 } else {
                     importFailed = true
                 }
             case .failure:
                 importFailed = true
             }
+        }
+        .confirmationDialog(
+            "Delete this profile?",
+            isPresented: Binding(get: { profileToDelete != nil }, set: { if !$0 { profileToDelete = nil } }),
+            presenting: profileToDelete
+        ) { id in
+            Button("Delete", role: .destructive) {
+                store.deleteProfile(id)
+                deviceManager.pushCurrentPage()
+            }
+        } message: { id in
+            Text("Deletes \"\(store.profiles.first(where: { $0.id == id })?.name ?? "")\" and every page in it. The current state is snapshotted first, so Previous Versions can bring it back.")
+        }
+        .confirmationDialog(
+            "Where should this go?",
+            isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } }),
+            presenting: pendingImport
+        ) { incoming in
+            Button("Add \(incoming.pages.count) Page\(incoming.pages.count == 1 ? "" : "s") to \"\(store.activeProfile.name)\"") {
+                store.appendPages(incoming.pages)
+                deviceManager.pushCurrentPage()
+            }
+            Button("Import as a Separate Profile") {
+                store.addImportedProfile(incoming)
+                deviceManager.pushCurrentPage()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { incoming in
+            Text("\"\(incoming.name)\" holds \(incoming.pages.count) page\(incoming.pages.count == 1 ? "" : "s"). Adding them keeps every page you already have and puts the new ones after them. A separate profile is a whole second layout; you switch to it here, not from the deck.")
         }
         .sheet(isPresented: $showLoupedeckImport) {
             LoupedeckImportView()

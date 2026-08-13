@@ -289,11 +289,20 @@ struct Profile: Codable, Equatable, Identifiable {
     var globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6)
     var knobIsGlobal: [Bool] = Array(repeating: false, count: 6)
 
+    // The same pinning for the 8 physical buttons. Index 0 is the status
+    // light, which is never written to the device, so pinning it is
+    // meaningless; the UI does not offer it and nothing here special-cases
+    // it beyond that.
+    var globalButtons: [ButtonConfig] = Array(repeating: ButtonConfig(), count: 8)
+    var buttonIsGlobal: [Bool] = Array(repeating: false, count: 8)
+
     init(id: UUID = UUID(), name: String = "Default", pages: [Page] = [Page(name: "Page 1")],
          brightness: UInt8 = 8, ledBrightness: UInt8 = 10, appSwitchingEnabled: Bool = false,
          appPageMappings: [String: String] = [:],
          globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6),
-         knobIsGlobal: [Bool] = Array(repeating: false, count: 6)) {
+         knobIsGlobal: [Bool] = Array(repeating: false, count: 6),
+         globalButtons: [ButtonConfig] = Array(repeating: ButtonConfig(), count: 8),
+         buttonIsGlobal: [Bool] = Array(repeating: false, count: 8)) {
         self.id = id
         self.name = name
         self.pages = pages
@@ -303,6 +312,8 @@ struct Profile: Codable, Equatable, Identifiable {
         self.appPageMappings = appPageMappings
         self.globalKnobs = globalKnobs
         self.knobIsGlobal = knobIsGlobal
+        self.globalButtons = globalButtons
+        self.buttonIsGlobal = buttonIsGlobal
     }
 
     // Tolerant decoding so profiles saved before this feature keep loading;
@@ -321,6 +332,10 @@ struct Profile: Codable, Equatable, Identifiable {
             ?? Array(repeating: KnobConfig(), count: 6)
         knobIsGlobal = try c.decodeIfPresent([Bool].self, forKey: .knobIsGlobal)
             ?? Array(repeating: false, count: 6)
+        globalButtons = try c.decodeIfPresent([ButtonConfig].self, forKey: .globalButtons)
+            ?? Array(repeating: ButtonConfig(), count: 8)
+        buttonIsGlobal = try c.decodeIfPresent([Bool].self, forKey: .buttonIsGlobal)
+            ?? Array(repeating: false, count: 8)
     }
 }
 
@@ -352,6 +367,11 @@ final class ProfileStore: ObservableObject {
         where profile.knobIsGlobal.indices.contains(i) && profile.knobIsGlobal[i]
             && profile.globalKnobs.indices.contains(i) {
             page.knobs[i] = profile.globalKnobs[i]
+        }
+        for i in page.buttons.indices
+        where profile.buttonIsGlobal.indices.contains(i) && profile.buttonIsGlobal[i]
+            && profile.globalButtons.indices.contains(i) {
+            page.buttons[i] = profile.globalButtons[i]
         }
         return page
     }
@@ -403,6 +423,55 @@ final class ProfileStore: ObservableObject {
                 profile.pages[pageIdx].knobs[index] = profile.globalKnobs[index]
             }
             profile.knobIsGlobal[index] = isGlobal
+        }
+    }
+
+    func isButtonGlobal(_ index: Int) -> Bool {
+        activeProfile.buttonIsGlobal.indices.contains(index) && activeProfile.buttonIsGlobal[index]
+    }
+
+    /// The button config actually in effect right now for `index`, whether it
+    /// comes from the current page or a pinned global slot.
+    func buttonConfig(_ index: Int) -> ButtonConfig {
+        let profile = activeProfile
+        if isButtonGlobal(index), profile.globalButtons.indices.contains(index) {
+            return profile.globalButtons[index]
+        }
+        return currentPage.buttons.indices.contains(index) ? currentPage.buttons[index] : ButtonConfig()
+    }
+
+    /// Writes a button's config to wherever it currently lives: the global
+    /// slot if pinned, otherwise just the current page.
+    func updateButton(_ index: Int, _ newValue: ButtonConfig) {
+        if isButtonGlobal(index) {
+            updateActive { profile in
+                guard profile.globalButtons.indices.contains(index) else { return }
+                profile.globalButtons[index] = newValue
+            }
+        } else {
+            updateCurrentPage { page in
+                guard page.buttons.indices.contains(index) else { return }
+                page.buttons[index] = newValue
+            }
+        }
+    }
+
+    /// Pins or unpins a button, seeding the global slot from the current page
+    /// on the way in and writing it back down on the way out, so neither
+    /// direction loses what was already configured.
+    func setButtonGlobal(_ index: Int, _ isGlobal: Bool) {
+        let pageIdx = currentPageIndex
+        updateActive { profile in
+            guard profile.buttonIsGlobal.indices.contains(index),
+                  profile.globalButtons.indices.contains(index),
+                  profile.pages.indices.contains(pageIdx)
+            else { return }
+            if isGlobal {
+                profile.globalButtons[index] = profile.pages[pageIdx].buttons[index]
+            } else {
+                profile.pages[pageIdx].buttons[index] = profile.globalButtons[index]
+            }
+            profile.buttonIsGlobal[index] = isGlobal
         }
     }
 
@@ -740,6 +809,28 @@ final class ProfileStore: ObservableObject {
         save()
     }
 
+    /// Makes another saved profile the live one. Without this an import or a
+    /// duplicate is a one-way door: both switch you to what they created and
+    /// there is no route back to what you had.
+    func switchProfile(to id: UUID) {
+        guard id != activeProfileID, profiles.contains(where: { $0.id == id }) else { return }
+        activeProfileID = id
+        currentPageIndex = 0
+        save()
+    }
+
+    /// Removes a profile; refuses to remove the last one, since a store with
+    /// no profiles has nothing to fall back to.
+    func deleteProfile(_ id: UUID) {
+        guard profiles.count > 1, let idx = profiles.firstIndex(where: { $0.id == id }) else { return }
+        profiles.remove(at: idx)
+        if activeProfileID == id {
+            activeProfileID = profiles.first?.id
+            currentPageIndex = 0
+        }
+        save()
+    }
+
     // MARK: - Native profile export/import (.razerstream files)
 
     /// Encodes a single profile as a standalone file, separate from the
@@ -750,21 +841,11 @@ final class ProfileStore: ObservableObject {
         return try? JSONEncoder().encode(profile)
     }
 
-    /// Imports a profile written by exportData(for:). Always gets a fresh
-    /// id, so it can never collide with or overwrite an existing profile,
-    /// and becomes the active profile so the import is immediately visible.
-    @discardableResult
-    func importProfile(from data: Data) -> Bool {
-        guard var profile = try? JSONDecoder().decode(Profile.self, from: data) else { return false }
-        profile.id = UUID()
-        if profiles.contains(where: { $0.name == profile.name }) {
-            profile.name += " (imported)"
-        }
-        profiles.append(profile)
-        activeProfileID = profile.id
-        currentPageIndex = 0
-        save()
-        return true
+    /// Decodes a profile written by exportData(for:) without touching the
+    /// store, so the caller can ask where the contents should go before
+    /// anything is committed.
+    func decodeProfile(from data: Data) -> Profile? {
+        try? JSONDecoder().decode(Profile.self, from: data)
     }
 
     /// Appends pages to the active profile, leaving every existing page in

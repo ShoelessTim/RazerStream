@@ -324,6 +324,38 @@ by the same effective LED brightness as every other write so the preview is
 honest. Preview saves nothing; leaving a button without applying restores its
 stored colour.
 
+## Profiles vs pages, and pinned buttons (shipped v1.7.3)
+
+Prompted by a real incident: importing a `.razerstream` file looked exactly
+like the app deleting a layout. It did not delete anything. `importProfile`
+unconditionally created a second profile and switched to it, and nothing in
+the app could switch back, because there was no profile-switcher UI anywhere.
+
+The deeper point is that most people organise a deck as pages, not profiles.
+Pages are what a Page Navigation knob moves between, so a page is reachable
+from the hardware and a profile is not. Anything that quietly lands content in
+a separate profile is therefore invisible from the deck.
+
+Three changes:
+
+1. Importing a `.razerstream` file asks where its pages should go: added to
+   the current profile, or kept as a separate profile. Adding is the default,
+   matching what the Loupedeck importer already did.
+2. Settings > History lists every profile, with Switch To and delete, shown
+   only when more than one profile exists.
+3. Physical buttons can be pinned across pages, exactly like knobs:
+   `globalButtons`/`buttonIsGlobal` on Profile, `isButtonGlobal`,
+   `buttonConfig`, `updateButton`, and `setButtonGlobal` on the store, and a
+   "Same button on every page" toggle in the inspector. Pinning seeds the
+   global slot from the current page and unpinning writes it back down, so
+   neither direction loses a config. Button 1 is the status light and is not
+   offered.
+
+Worth knowing for anything similar later: every device write and every
+on-screen mirror already read through `resolvedCurrentPage`, so teaching that
+one property to substitute pinned buttons alongside pinned knobs covered the
+LED push, press handling, and the window preview at once.
+
 ## Plan: Command tiles (a tile that shows your own script's output)
 
 Status: planned, not built. Written up 2026-07-27 after a "can a button run a

@@ -11,7 +11,7 @@ it directly so the device keeps living.
 RazerStream is faster and lighter than the app it replaces, and it is a
 community project; fork it, extend it, send pull requests.
 
-**Current release: [v1.7.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.2)**
+**Current release: [v1.7.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.3)**
 
 Not affiliated with Razer, Loupedeck, or Logitech.
 
@@ -40,9 +40,9 @@ Not affiliated with Razer, Loupedeck, or Logitech.
   Screen + LED Brightness, Page Navigation, Track skip, and Mouse Scroll
   (vertical or horizontal) are each a single choice instead of hand-wiring
   clockwise and counterclockwise separately, with one Settings toggle to flip
-  which direction counts as "up" for all of them; fast turns step further. A
-  knob can also be pinned so its config is shared across every page instead of
-  set up per page.
+  which direction counts as "up" for all of them; fast turns step further.
+- Pin a knob or a physical button so its config is shared across every page
+  instead of being set up page by page; the status light is left alone
 - Multiple pages per profile (sidebar +/- to add or remove); switch manually,
   use shift-hold layers, or let RazerStream switch pages automatically based
   on which app is frontmost
@@ -52,7 +52,10 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Idle dimming: screen and button LEDs fade after inactivity and wake on any
   input; the status light is never touched, so connection state always
   stays visible
-- Export or import a single profile as a standalone `.razerstream` file
+- Export or import a single profile as a standalone `.razerstream` file;
+  importing asks whether to add its pages to the profile you are on or keep
+  it as a separate profile, and Settings > History lists every profile you
+  have so you can switch between them
 - Import your existing Loupedeck profiles: pages, labels, and every action with
   an equivalent here come across, appended to your current profile, with a
   review step showing exactly what needs reassigning first
@@ -62,20 +65,20 @@ Not affiliated with Razer, Loupedeck, or Logitech.
 - Native color panel (crayons included), dark mode that follows the system,
   launch at login, and a device self-test with LED sweep and screen pattern
 
-## What's new in 1.7.2
+## What's new in 1.7.3
 
-- **macOS features on a tile:** 19 system actions including screenshots,
-  Mission Control, Spotlight, lock screen, and dark mode.
-- **Shortcuts you could not assign before.** Recording can never capture
-  macOS's own shortcuts (pressing Cmd+Shift+4 takes a screenshot instead), so
-  there is now a builder: toggle modifiers, pick a key. It only offers keys
-  the app can actually send.
-- **LED colours you can see:** named presets, an explicit Off, and the real
-  button lights up as you pick.
-- **1.7.0 was the V2 release:** Loupedeck profile import, 12,387 bundled
-  icons, and device reports for unsupported decks.
+- **Pin a physical button across pages.** Buttons get the same "same on every
+  page" toggle the knobs already had, so a button you always want to mean the
+  same thing only has to be set up once. The status light is untouched.
+- **Importing a `.razerstream` file asks where it should go:** add its pages
+  to the profile you are on, or keep it as a separate profile. It used to
+  silently do the second, which looked exactly like losing your layout if you
+  organise your deck as pages.
+- **A profile list in Settings > History**, with switching and deleting. It
+  appears once you have more than one profile. Nothing else in the app could
+  switch between profiles, so importing or duplicating one was a one-way door.
 
-Full notes: [release v1.7.2](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.2).
+Full notes: [release v1.7.3](https://github.com/ShoelessTim/RazerStream/releases/tag/v1.7.3).
 Docs and FAQ: [project wiki](https://github.com/ShoelessTim/RazerStream/wiki).
 
 ## Requirements
@@ -97,7 +100,7 @@ brew upgrade --cask razerstream
 
 Or by hand:
 
-1. Download `RazerStream-v1.7.2.zip` from the
+1. Download `RazerStream-v1.7.3.zip` from the
    [latest release](https://github.com/ShoelessTim/RazerStream/releases/latest)
 2. Unzip and drag `RazerStream.app` into `/Applications`
 3. Double-click to open; releases are Developer ID signed and notarized by

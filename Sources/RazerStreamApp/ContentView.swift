@@ -1335,12 +1335,21 @@ struct ButtonInspector: View {
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
     @State private var ledHex = "000000"
+    @State private var isGlobal = false
 
     private var isStatusLight: Bool { buttonIndex == 0 }
 
     var body: some View {
         Form {
             Section("Physical Button \(buttonIndex + 1)") {
+                if !isStatusLight {
+                    Toggle("Same button on every page", isOn: $isGlobal)
+                    if isGlobal {
+                        Text("Pinned: editing this button updates it everywhere, not just this page.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 ModeEditor(mode: $mode, action: $action,
                            releaseAction: $releaseAction, altSymbol: nil)
                 if isStatusLight {
@@ -1370,7 +1379,8 @@ struct ButtonInspector: View {
     }
 
     private func loadCurrent() {
-        let button = store.currentPage.buttons[buttonIndex]
+        isGlobal = store.isButtonGlobal(buttonIndex)
+        let button = store.buttonConfig(buttonIndex)
         action = button.action
         releaseAction = button.releaseAction
         mode = button.mode
@@ -1379,21 +1389,22 @@ struct ButtonInspector: View {
 
     /// Re-lights a button from what is actually saved, undoing any preview.
     private func restoreStoredLED(for index: Int) {
-        guard index > 0, store.currentPage.buttons.indices.contains(index) else { return }
-        let stored = store.currentPage.buttons[index].ledHex
+        guard index > 0 else { return }
+        let stored = store.buttonConfig(index).ledHex
         guard stored != ledHex else { return }
         deviceManager.previewButtonLED(index, hex: stored)
     }
 
     private func apply() {
-        store.updateCurrentPage { page in
-            page.buttons[buttonIndex] = ButtonConfig(
-                action: action,
-                releaseAction: releaseAction,
-                mode: mode,
-                ledHex: isStatusLight ? "000000" : ledHex
-            )
+        if !isStatusLight, isGlobal != store.isButtonGlobal(buttonIndex) {
+            store.setButtonGlobal(buttonIndex, isGlobal)
         }
+        store.updateButton(buttonIndex, ButtonConfig(
+            action: action,
+            releaseAction: releaseAction,
+            mode: mode,
+            ledHex: isStatusLight ? "000000" : ledHex
+        ))
         deviceManager.pushCurrentPage()
     }
 }
