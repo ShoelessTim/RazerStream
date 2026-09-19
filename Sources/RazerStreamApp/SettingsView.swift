@@ -40,6 +40,8 @@ struct SettingsView: View {
     @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
     @State private var idleDimmingEnabled = IdleDimming.isEnabled
     @State private var idleDimmingMinutes = IdleDimming.minutes
+    @State private var deviceOrientation: DeviceOrientation = .standard
+    @State private var rightStripContent: RightStripContent = .knobZones
     @State private var reportCopied = false
 
     var body: some View {
@@ -119,6 +121,34 @@ struct SettingsView: View {
                 .onChange(of: brightness) { _, v in
                     store.updateActive { $0.brightness = UInt8(v) }
                     deviceManager.pushBrightness()
+                }
+
+                Picker("Orientation", selection: $deviceOrientation) {
+                    ForEach(DeviceOrientation.allCases) { orientation in
+                        Text(orientation.displayName).tag(orientation)
+                    }
+                }
+                .onChange(of: deviceOrientation) { _, orientation in
+                    store.updateActive { $0.deviceOrientation = orientation }
+                    deviceManager.pushCurrentPage()
+                }
+
+                if deviceOrientation == .clockwise {
+                    Picker("Bottom strip", selection: $rightStripContent) {
+                        ForEach(RightStripContent.allCases) { content in
+                            Text(content.displayName).tag(content)
+                        }
+                    }
+                    .onChange(of: rightStripContent) { _, content in
+                        store.updateActive { $0.rightStripContent = content }
+                        deviceManager.pushCurrentPage()
+                    }
+
+                    if rightStripContent == .appleMusic {
+                        Text("Uses the three bottom knob display zones as one banner. The knobs keep their configured actions. macOS may ask for permission to control Music.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -214,6 +244,8 @@ struct SettingsView: View {
             clockwiseIncreases = KnobDirection.clockwiseIncreases
             idleDimmingEnabled = IdleDimming.isEnabled
             idleDimmingMinutes = IdleDimming.minutes
+            deviceOrientation = store.activeProfile.deviceOrientation
+            rightStripContent = store.activeProfile.rightStripContent
         }
     }
 

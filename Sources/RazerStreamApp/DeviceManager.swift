@@ -12,6 +12,7 @@ final class DeviceManager: ObservableObject {
     @Published var firmware: String = "—"
     @Published var serial: String = "—"
     @Published var lastEvent: String = "—"
+    @Published private(set) var musicNowPlaying: MusicNowPlaying = .notRunning
 
     private var device: RazerStreamDevice?
     private var eventTask: Task<Void, Never>?
@@ -21,6 +22,7 @@ final class DeviceManager: ObservableObject {
     private var ledWriteTask: Task<Void, Never>?
     private var liveTileTask: Task<Void, Never>?
     private var systemMeterTask: Task<Void, Never>?
+    private var musicNowPlayingTask: Task<Void, Never>?
     private var idleCheckTask: Task<Void, Never>?
     private var obsLEDTask: Task<Void, Never>?
     let obsMonitor = OBSMonitor()
@@ -57,6 +59,7 @@ final class DeviceManager: ObservableObject {
         connectLoop()
         startLiveTileClock()
         startSystemMeterClock()
+        startMusicNowPlayingClock()
         startIdleCheck()
         obsMonitor.onAlert = { [weak self] alert in self?.buzz(for: alert) }
         obsMonitor.start()
@@ -72,6 +75,7 @@ final class DeviceManager: ObservableObject {
         ledWriteTask?.cancel()
         liveTileTask?.cancel()
         systemMeterTask?.cancel()
+        musicNowPlayingTask?.cancel()
         idleCheckTask?.cancel()
         obsLEDTask?.cancel()
         obsMonitor.stop()
@@ -128,6 +132,7 @@ final class DeviceManager: ObservableObject {
         // clock/meter are not stuck on the last pre-dim frame.
         refreshLiveTiles()
         refreshSystemMeterTiles()
+        refreshMusicBanner()
     }
 
     // Faint but still visible, roughly matching the touchscreen's own
@@ -201,10 +206,12 @@ final class DeviceManager: ObservableObject {
         // via the next noteInput-driven redraw or the next timer tick after.
         guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
+        let usesMusicBanner = store.activeProfile.usesMusicBanner
         for (i, tile) in page.tiles.enumerated() where tile.liveContent != .none {
             pushTile(i)
         }
-        for (i, knob) in page.knobs.enumerated() where knob.liveContent != .none {
+        for (i, knob) in page.knobs.enumerated()
+        where knob.liveContent != .none && !(usesMusicBanner && i >= 3) {
             pushKnobZone(i)
         }
     }
@@ -225,11 +232,26 @@ final class DeviceManager: ObservableObject {
     private func refreshSystemMeterTiles() {
         guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
+        let usesMusicBanner = store.activeProfile.usesMusicBanner
         for (i, tile) in page.tiles.enumerated() where tile.liveContent == .systemMeter {
             pushTile(i)
         }
-        for (i, knob) in page.knobs.enumerated() where knob.liveContent == .systemMeter {
+        for (i, knob) in page.knobs.enumerated()
+        where knob.liveContent == .systemMeter && !(usesMusicBanner && i >= 3) {
             pushKnobZone(i)
+        }
+    }
+
+    // MARK: - Apple Music banner
+
+    private func startMusicNowPlayingClock() {
+        musicNowPlayingTask?.cancel()
+        musicNowPlayingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.refreshMusicBanner()
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
     }
 
@@ -267,11 +289,8 @@ final class DeviceManager: ObservableObject {
                 } else {
                     await self?.animateOBSTiles(phase: tick % 4)
                 }
-            }
-        }
-    }
-
     private var obsPhase = 0
+
 
     private func animateOBSTiles(phase: Int) async {
         guard connected, let device, let store, !isDimmed else { return }
@@ -282,7 +301,10 @@ final class DeviceManager: ObservableObject {
             let face = obsFace(for: role)
             guard face.isAnimated else { continue }
             lastOBSFace[i] = face
-            try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face, phase: phase)))
+            try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(
+                tile, obsFace: face, phase: phase,
+                orientation: store.activeProfile.deviceOrientation
+            )))
         }
     }
 
@@ -302,7 +324,10 @@ final class DeviceManager: ObservableObject {
                 guard lastOBSFace[i] != face || face.isAnimated else { continue }
                 lastOBSFace[i] = face
                 obsPhase = 0
-                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face, phase: 0)))
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(
+                    tile, obsFace: face, phase: 0,
+                    orientation: store.activeProfile.deviceOrientation
+                )))
                 try? await Task.sleep(for: .milliseconds(60))
             }
         }
@@ -322,13 +347,15 @@ final class DeviceManager: ObservableObject {
 
     /// A tile's image: its OBS face when it is an OBS tile, otherwise as configured.
     private func renderTile(_ index: Int, _ tile: TileConfig, holdProgress: Double? = nil) -> Data {
+        let orientation = store?.activeProfile.deviceOrientation ?? .standard
         if let role = tile.obsRole {
             let face = obsFace(for: role)
             lastOBSFace[index] = face
-            return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress, phase: obsPhase)
+            return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress,
+                                       phase: obsPhase, orientation: orientation)
         }
         let isOn = toggleStates[toggleKey(tile: index)] ?? false
-        return TileRenderer.render(tile, toggledOn: isOn)
+        return TileRenderer.render(tile, toggledOn: isOn, orientation: orientation)
     }
 
     private func obsFace(for role: OBSTileRole) -> OBSFace {
@@ -406,6 +433,26 @@ final class DeviceManager: ObservableObject {
         case .micMutedWhileLive:
             try? device.send(.vibrate(.short))
         }
+    }
+
+    func refreshMusicBanner(force: Bool = false) {
+        guard connected, !isDimmed, let store, store.activeProfile.usesMusicBanner else { return }
+        let current = MusicNowPlayingProvider.current()
+        guard force || current != musicNowPlaying else { return }
+        musicNowPlaying = current
+        pushMusicBanner()
+    }
+
+    private func pushMusicBanner() {
+        guard let device, let store, store.activeProfile.usesMusicBanner else { return }
+        try? device.send(.setDisplayImage(
+            display: .center,
+            x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth,
+            y: 0,
+            w: 60,
+            h: 270,
+            rgb565: TileRenderer.renderMusicBanner(musicNowPlaying)
+        ))
     }
 
     // MARK: - Connection
@@ -638,12 +685,16 @@ final class DeviceManager: ObservableObject {
     /// outside the page struct.
     private func pushKnobZone(_ index: Int) {
         guard let device, let store, store.resolvedCurrentPage.knobs.indices.contains(index) else { return }
+        let profile = store.activeProfile
+        if profile.usesMusicBanner && index >= 3 { return }
         let knob = store.resolvedCurrentPage.knobs[index]
         let x = index < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
         let y = (index % 3) * 90
         try? device.send(.setDisplayImage(
             display: .center, x: x, y: y, w: 60, h: 90,
-            rgb565: TileRenderer.renderKnobZone(knob, index: index)
+            rgb565: TileRenderer.renderKnobZone(
+                knob, index: index, orientation: profile.deviceOrientation
+            )
         ))
     }
 
@@ -735,6 +786,9 @@ final class DeviceManager: ObservableObject {
         guard let device, let store else { return }
         let profile = store.activeProfile
         let page = store.resolvedCurrentPage
+        if profile.usesMusicBanner {
+            musicNowPlaying = MusicNowPlayingProvider.current()
+        }
         // Capture idle state for this push so a mid-push wake does not leave
         // half the LEDs at the wrong scale.
         let dimmed = isDimmed
@@ -766,11 +820,27 @@ final class DeviceManager: ObservableObject {
             // Knob zones; 0 to 2 left strip (x=0), 3 to 5 right strip (x=420)
             for (i, knob) in page.knobs.enumerated() {
                 if Task.isCancelled { return }
+                if profile.usesMusicBanner && i >= 3 { continue }
                 let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
                 let y = (i % 3) * 90
                 try? device.send(.setDisplayImage(
                     display: .center, x: x, y: y, w: 60, h: 90,
-                    rgb565: TileRenderer.renderKnobZone(knob, index: i)
+                    rgb565: TileRenderer.renderKnobZone(
+                        knob, index: i, orientation: profile.deviceOrientation
+                    )
+                ))
+                try? await Task.sleep(for: .milliseconds(60))
+            }
+
+            if profile.usesMusicBanner {
+                if Task.isCancelled { return }
+                try? device.send(.setDisplayImage(
+                    display: .center,
+                    x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth,
+                    y: 0,
+                    w: 60,
+                    h: 270,
+                    rgb565: TileRenderer.renderMusicBanner(musicNowPlaying)
                 ))
                 try? await Task.sleep(for: .milliseconds(60))
             }

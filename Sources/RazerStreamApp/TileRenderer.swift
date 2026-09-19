@@ -90,14 +90,16 @@ enum TileRenderer {
 
     // MARK: - Tiles (90×90)
 
-    static func render(_ tile: TileConfig, toggledOn: Bool = false) -> Data {
-        render(tile, toggledOn: toggledOn, obsFace: nil)
+    static func render(_ tile: TileConfig, toggledOn: Bool = false,
+                       orientation: DeviceOrientation = .standard) -> Data {
+        render(tile, toggledOn: toggledOn, obsFace: nil, orientation: orientation)
     }
 
     /// `obsFace` draws an OBS page tile (title over a large value on a status
     /// color) in place of the tile's own label, icon and color.
     static func render(_ tile: TileConfig, toggledOn: Bool = false, obsFace: OBSFace?,
-                       holdProgress: Double? = nil, phase: Int = 0) -> Data {
+                       holdProgress: Double? = nil, phase: Int = 0,
+                       orientation: DeviceOrientation = .standard) -> Data {
         let size = RazerStreamController.buttonSize
         guard let ctx = makeContext(width: size, height: size) else {
             return Data(count: size * size * 2)
@@ -105,7 +107,8 @@ enum TileRenderer {
 
         if let face = obsFace {
             drawOBSFace(face, holdProgress: holdProgress, phase: phase, in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         }
 
         ctx.setFillColor(color(fromHex: tile.colorHex))
@@ -115,13 +118,16 @@ enum TileRenderer {
         // color and toggle ring above/below still apply
         if tile.liveContent == .clock {
             drawClockFace(in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         } else if tile.liveContent == .systemMeter {
             drawSystemMeter(in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         } else if tile.liveContent == .diskSpace {
             drawDiskSpace(in: ctx, canvas: size, volumePath: tile.diskSpaceVolume)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         }
 
         // Toggles that are ON use the alternate icon when set
@@ -160,13 +166,19 @@ enum TileRenderer {
             ctx.stroke(CGRect(x: 2, y: 2, width: size - 4, height: size - 4))
         }
 
-        return rgb565(from: ctx, width: size, height: size)
+        return oriented(rgb565(from: ctx, width: size, height: size),
+                        width: size, height: size, orientation: orientation)
     }
 
     // MARK: - Knob zones (60×90)
 
-    static func renderKnobZone(_ knob: KnobConfig, index: Int) -> Data {
-        let w = 60, h = 90
+    static func renderKnobZone(
+        _ knob: KnobConfig,
+        index: Int,
+        orientation: DeviceOrientation = .standard
+    ) -> Data {
+        let w = orientation == .clockwise ? 90 : 60
+        let h = orientation == .clockwise ? 60 : 90
         guard let ctx = makeContext(width: w, height: h) else {
             return Data(count: w * h * 2)
         }
@@ -176,13 +188,16 @@ enum TileRenderer {
 
         if knob.liveContent == .clock {
             drawCompactClockFace(in: ctx, width: w, height: h)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         } else if knob.liveContent == .systemMeter {
             drawCompactSystemMeter(in: ctx, width: w, height: h)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         } else if knob.liveContent == .diskSpace {
             drawCompactDiskSpace(in: ctx, width: w, height: h, volumePath: knob.diskSpaceVolume)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         }
 
         // Center the icon and label as one vertical group; icon alone sits
@@ -225,7 +240,58 @@ enum TileRenderer {
                      fontSize: 10, yOffset: nil)
         }
 
-        return rgb565(from: ctx, width: w, height: h)
+        return oriented(rgb565(from: ctx, width: w, height: h),
+                        width: w, height: h, orientation: orientation)
+    }
+
+    // MARK: - Spanning side strip
+
+    static func renderMusicBanner(_ nowPlaying: MusicNowPlaying) -> Data {
+        let width = 270
+        let height = 60
+        guard let ctx = makeContext(width: width, height: height) else {
+            return Data(count: width * height * 2)
+        }
+
+        ctx.setFillColor(CGColor(red: 0.055, green: 0.055, blue: 0.07, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        let accent: NSColor
+        let title: String
+        let detail: String
+        switch nowPlaying.state {
+        case .notRunning:
+            accent = .tertiaryLabelColor
+            title = "Apple Music"
+            detail = "Not running"
+        case .unavailable:
+            accent = .systemRed
+            title = "Apple Music"
+            detail = "Metadata unavailable"
+        case .stopped:
+            accent = .tertiaryLabelColor
+            title = "Apple Music"
+            detail = "Stopped"
+        case .paused:
+            accent = .systemOrange
+            title = nowPlaying.title.isEmpty ? "Apple Music" : nowPlaying.title
+            detail = nowPlaying.artist.isEmpty ? "Paused" : "Paused · \(nowPlaying.artist)"
+        case .playing:
+            accent = .systemPink
+            title = nowPlaying.title.isEmpty ? "Apple Music" : nowPlaying.title
+            detail = nowPlaying.artist.isEmpty ? "Playing" : nowPlaying.artist
+        }
+
+        ctx.setFillColor(accent.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 5, height: height))
+        drawBannerLine(title, in: ctx, frame: CGRect(x: 14, y: 30, width: 246, height: 22),
+                       font: .boldSystemFont(ofSize: 18), color: .white)
+        drawBannerLine(detail, in: ctx, frame: CGRect(x: 14, y: 9, width: 246, height: 17),
+                       font: .systemFont(ofSize: 12, weight: .medium), color: .secondaryLabelColor)
+
+        let logical = rgb565(from: ctx, width: width, height: height)
+        return RGB565.rotatedCounterClockwise(logical, width: width, height: height)
+            ?? Data(count: width * height * 2)
     }
 
     /// A smaller clock face sized for the 60-wide knob strip; time only,
@@ -524,6 +590,27 @@ enum TileRenderer {
         NSGraphicsContext.restoreGraphicsState()
     }
 
+    private static func drawBannerLine(
+        _ text: String,
+        in ctx: CGContext,
+        frame: CGRect,
+        font: NSFont,
+        color: NSColor
+    ) {
+        let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsCtx
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .left
+        paragraph.lineBreakMode = .byTruncatingTail
+        NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+        ]).draw(in: frame)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
     /// RGBA8888 → RGB565 LE. CGContext memory is top-row-first; no flipping.
     private static func rgb565(from ctx: CGContext, width: Int, height: Int) -> Data {
         guard let pixels = ctx.data else { return Data(count: width * height * 2) }
@@ -540,6 +627,20 @@ enum TileRenderer {
             }
         }
         return out
+    }
+
+    private static func oriented(
+        _ rgb565: Data,
+        width: Int,
+        height: Int,
+        orientation: DeviceOrientation
+    ) -> Data {
+        switch orientation {
+        case .standard:  return rgb565
+        case .clockwise:
+            return RGB565.rotatedCounterClockwise(rgb565, width: width, height: height)
+                ?? Data(count: width * height * 2)
+        }
     }
 
     private static func color(fromHex hex: String) -> CGColor {
