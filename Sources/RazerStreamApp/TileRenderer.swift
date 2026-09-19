@@ -246,9 +246,12 @@ enum TileRenderer {
 
     // MARK: - Spanning side strip
 
-    static func renderMusicBanner(_ nowPlaying: MusicNowPlaying) -> Data {
-        let width = 270
-        let height = 60
+    static func renderMusicBanner(
+        _ nowPlaying: MusicNowPlaying,
+        orientation: DeviceOrientation
+    ) -> Data {
+        let width = orientation == .clockwise ? 270 : 60
+        let height = orientation == .clockwise ? 60 : 270
         guard let ctx = makeContext(width: width, height: height) else {
             return Data(count: width * height * 2)
         }
@@ -284,12 +287,22 @@ enum TileRenderer {
 
         ctx.setFillColor(accent.cgColor)
         ctx.fill(CGRect(x: 0, y: 0, width: 5, height: height))
-        drawBannerLine(title, in: ctx, frame: CGRect(x: 14, y: 30, width: 246, height: 22),
-                       font: .boldSystemFont(ofSize: 18), color: .white)
-        drawBannerLine(detail, in: ctx, frame: CGRect(x: 14, y: 9, width: 246, height: 17),
-                       font: .systemFont(ofSize: 12, weight: .medium), color: .secondaryLabelColor)
+        if orientation == .clockwise {
+            drawBannerLine(title, in: ctx, frame: CGRect(x: 14, y: 30, width: 246, height: 22),
+                           font: .boldSystemFont(ofSize: 18), color: .white)
+            drawBannerLine(detail, in: ctx, frame: CGRect(x: 14, y: 9, width: 246, height: 17),
+                           font: .systemFont(ofSize: 12, weight: .medium), color: .secondaryLabelColor)
+        } else {
+            drawPanelText("♫", in: ctx, frame: CGRect(x: 9, y: 218, width: 42, height: 30),
+                          font: .systemFont(ofSize: 22), color: accent)
+            drawPanelText(title, in: ctx, frame: CGRect(x: 8, y: 112, width: 44, height: 92),
+                          font: .boldSystemFont(ofSize: 12), color: .white)
+            drawPanelText(detail, in: ctx, frame: CGRect(x: 8, y: 28, width: 44, height: 70),
+                          font: .systemFont(ofSize: 10, weight: .medium), color: .secondaryLabelColor)
+        }
 
         let logical = rgb565(from: ctx, width: width, height: height)
+        guard orientation == .clockwise else { return logical }
         return RGB565.rotatedCounterClockwise(logical, width: width, height: height)
             ?? Data(count: width * height * 2)
     }
@@ -603,6 +616,27 @@ enum TileRenderer {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .left
         paragraph.lineBreakMode = .byTruncatingTail
+        NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+        ]).draw(in: frame)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private static func drawPanelText(
+        _ text: String,
+        in ctx: CGContext,
+        frame: CGRect,
+        font: NSFont,
+        color: NSColor
+    ) {
+        let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsCtx
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byWordWrapping
         NSAttributedString(string: text, attributes: [
             .font: font,
             .foregroundColor: color,

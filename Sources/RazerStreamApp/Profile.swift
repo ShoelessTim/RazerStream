@@ -157,7 +157,7 @@ enum DeviceOrientation: String, Codable, Equatable, CaseIterable, Identifiable {
     }
 }
 
-enum RightStripContent: String, Codable, Equatable, CaseIterable, Identifiable {
+enum StripContent: String, Codable, Equatable, CaseIterable, Identifiable {
     case knobZones
     case appleMusic
 
@@ -165,10 +165,12 @@ enum RightStripContent: String, Codable, Equatable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .knobZones:  return "Knob labels"
+        case .knobZones:  return "Three knob panels"
         case .appleMusic: return "Apple Music Now Playing"
         }
     }
+
+    var usesSpanningPanel: Bool { self != .knobZones }
 }
 
 // MARK: - Per-control configuration
@@ -351,10 +353,19 @@ struct Profile: Codable, Equatable, Identifiable {
     var brightness: UInt8 = 8
     var ledBrightness: UInt8 = 10   // 0...10, matching screen brightness's convention; the 7 configurable button LEDs are scaled by this fraction of their configured color
     var deviceOrientation: DeviceOrientation = .standard
-    var rightStripContent: RightStripContent = .knobZones
+    var leftStripContent: StripContent = .knobZones
+    var rightStripContent: StripContent = .knobZones
 
-    var usesMusicBanner: Bool {
-        deviceOrientation == .clockwise && rightStripContent == .appleMusic
+    var hasMusicPanel: Bool {
+        leftStripContent == .appleMusic || rightStripContent == .appleMusic
+    }
+
+    func stripContent(forKnob index: Int) -> StripContent {
+        index < 3 ? leftStripContent : rightStripContent
+    }
+
+    func knobZoneIsCovered(_ index: Int) -> Bool {
+        stripContent(forKnob: index).usesSpanningPanel
     }
 
     // App-switching: which page to show automatically when a given app
@@ -383,7 +394,8 @@ struct Profile: Codable, Equatable, Identifiable {
     init(id: UUID = UUID(), name: String = "Default", pages: [Page] = [Page(name: "Page 1")],
          brightness: UInt8 = 8, ledBrightness: UInt8 = 10, appSwitchingEnabled: Bool = false,
          deviceOrientation: DeviceOrientation = .standard,
-         rightStripContent: RightStripContent = .knobZones,
+         leftStripContent: StripContent = .knobZones,
+         rightStripContent: StripContent = .knobZones,
          appPageMappings: [String: String] = [:],
          globalKnobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6),
          knobIsGlobal: [Bool] = Array(repeating: false, count: 6),
@@ -395,6 +407,7 @@ struct Profile: Codable, Equatable, Identifiable {
         self.brightness = brightness
         self.ledBrightness = ledBrightness
         self.deviceOrientation = deviceOrientation
+        self.leftStripContent = leftStripContent
         self.rightStripContent = rightStripContent
         self.appSwitchingEnabled = appSwitchingEnabled
         self.appPageMappings = appPageMappings
@@ -415,7 +428,8 @@ struct Profile: Codable, Equatable, Identifiable {
         brightness = try c.decodeIfPresent(UInt8.self, forKey: .brightness) ?? 8
         ledBrightness = try c.decodeIfPresent(UInt8.self, forKey: .ledBrightness) ?? 10
         deviceOrientation = try c.decodeIfPresent(DeviceOrientation.self, forKey: .deviceOrientation) ?? .standard
-        rightStripContent = try c.decodeIfPresent(RightStripContent.self, forKey: .rightStripContent) ?? .knobZones
+        leftStripContent = try c.decodeIfPresent(StripContent.self, forKey: .leftStripContent) ?? .knobZones
+        rightStripContent = try c.decodeIfPresent(StripContent.self, forKey: .rightStripContent) ?? .knobZones
         appSwitchingEnabled = try c.decodeIfPresent(Bool.self, forKey: .appSwitchingEnabled) ?? false
         appPageMappings = try c.decodeIfPresent([String: String].self, forKey: .appPageMappings) ?? [:]
         globalKnobs = try c.decodeIfPresent([KnobConfig].self, forKey: .globalKnobs)

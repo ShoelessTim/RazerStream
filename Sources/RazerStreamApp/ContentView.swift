@@ -9,6 +9,11 @@ enum Selection: Equatable {
     case tile(Int), knob(Int), button(Int)
 }
 
+private enum StripSide {
+    case left
+    case right
+}
+
 /// Drag payload for reordering tiles within the grid, or moving one to a
 /// different page via the sidebar; in-process only, so a synthesized
 /// content type (not registered in Info.plist) is sufficient. The source
@@ -368,12 +373,12 @@ private struct PageAccessoryBar: NSViewRepresentable {
 extension ContentView {
     // MARK: - Device mirror
 
-    private var deviceMirror: some View {
+    private var standardDeviceMirror: some View {
         let page = store.resolvedCurrentPage
         return HStack(spacing: Self.knobGutter) {
-            knobColumn(indices: [0, 1, 2], page: page)
+            stripPreview(side: .left, indices: [0, 1, 2], page: page, horizontal: false)
             tileGrid(page: page)
-            knobColumn(indices: [3, 4, 5], page: page)
+            stripPreview(side: .right, indices: [3, 4, 5], page: page, horizontal: false)
         }
     }
 
@@ -386,15 +391,35 @@ extension ContentView {
     private static let knobGutter: CGFloat = 24
     // 4 tiles across plus 3 gaps between them
     static let tileGridWidth: CGFloat = 4 * tileSize + 3 * tileGap        // 360
+    private static let clockwiseTileGridWidth: CGFloat = 3 * tileSize + 2 * tileGap
+    private static let clockwiseTileGridHeight: CGFloat = 4 * tileSize + 3 * tileGap
     // left knob strip + gutter + tile grid + gutter + right knob strip
     static let mirrorWidth: CGFloat = 2 * (knobColumnWidth + knobGutter) + tileGridWidth  // 516
 
-    /// The whole device as one rigid unit: knob columns, tile grid, and the
-    /// physical button row locked together so they can never drift apart.
+    /// The whole device as one rigid unit, reflowed to match its physical
+    /// orientation while keeping labels and icons upright.
+    @ViewBuilder
     private var deviceUnit: some View {
-        VStack(spacing: 20) {
-            deviceMirror
-            physicalButtonRow
+        if store.activeProfile.deviceOrientation == .clockwise {
+            clockwiseDeviceUnit
+        } else {
+            VStack(spacing: 20) {
+                standardDeviceMirror
+                physicalButtonRow
+            }
+            .fixedSize()
+        }
+    }
+
+    private var clockwiseDeviceUnit: some View {
+        let page = store.resolvedCurrentPage
+        return HStack(spacing: 20) {
+            physicalButtonColumn(page: page)
+            VStack(spacing: Self.knobGutter) {
+                stripPreview(side: .left, indices: [2, 1, 0], page: page, horizontal: true)
+                clockwiseTileGrid(page: page)
+                stripPreview(side: .right, indices: [5, 4, 3], page: page, horizontal: true)
+            }
         }
         .fixedSize()
     }
@@ -407,6 +432,24 @@ extension ContentView {
                     ForEach(0..<cols, id: \.self) { col in
                         let idx = row * cols + col
                         tileView(page.tiles[idx], index: idx)
+                    }
+                }
+            }
+        }
+    }
+
+    private func clockwiseTileGrid(page: Page) -> some View {
+        let rows = [
+            [8, 4, 0],
+            [9, 5, 1],
+            [10, 6, 2],
+            [11, 7, 3],
+        ]
+        return VStack(spacing: Self.tileGap) {
+            ForEach(rows.indices, id: \.self) { row in
+                HStack(spacing: Self.tileGap) {
+                    ForEach(rows[row], id: \.self) { index in
+                        tileView(page.tiles[index], index: index)
                     }
                 }
             }
@@ -520,55 +563,214 @@ extension ContentView {
     }
 
     private func knobColumn(indices: [Int], page: Page) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Self.tileGap) {
             ForEach(indices, id: \.self) { i in
-                let knob = page.knobs[i]
-                Button { selection = .knob(i) } label: {
-                    Group {
-                        if knob.liveContent == .clock {
-                            compactClockFace()
-                        } else {
-                            VStack(spacing: 4) {
-                                if let stored = knob.imagePath,
-                                   let path = IconPath.resolved(stored),
-                                   let img = NSImage(contentsOfFile: path) {
-                                    Image(nsImage: img)
-                                        .renderingMode(knob.iconTint ? .template : .original)
-                                        .resizable().scaledToFit()
-                                        .frame(width: 20, height: 20)
-                                } else if let symbol = knob.sfSymbol {
-                                    Image(systemName: symbol).font(.system(size: 16))
-                                } else {
-                                    Image(systemName: "dial.medium").font(.system(size: 16))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
-                                    .font(.system(size: 9))
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .frame(width: 54, height: 84)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "16161a")))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(
-                                selection == .knob(i) ? Color.accentColor
-                                : (hoveredSelection == .knob(i) ? Color.white.opacity(0.4) : .clear),
-                                lineWidth: 3
-                            )
-                    )
-                    .scaleEffect(hoveredSelection == .knob(i) && selection != .knob(i) ? 1.05 : 1.0)
-                }
-                .buttonStyle(.plain)
-                .onHover { isHovering in
-                    hoveredSelection = isHovering ? .knob(i)
-                        : (hoveredSelection == .knob(i) ? nil : hoveredSelection)
-                }
-                .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
-                .animation(.easeInOut(duration: 0.12), value: selection)
+                knobView(index: i, page: page, width: Self.knobColumnWidth, height: Self.tileSize)
             }
+        }
+    }
+
+    private func knobRow(indices: [Int], page: Page) -> some View {
+        HStack(spacing: Self.tileGap) {
+            ForEach(indices, id: \.self) { i in
+                knobView(index: i, page: page, width: Self.tileSize, height: Self.knobColumnWidth)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stripPreview(
+        side: StripSide,
+        indices: [Int],
+        page: Page,
+        horizontal: Bool
+    ) -> some View {
+        let content = side == .left
+            ? store.activeProfile.leftStripContent
+            : store.activeProfile.rightStripContent
+        if content.usesSpanningPanel {
+            musicPanelPreview(indices: indices, horizontal: horizontal)
+        } else if horizontal {
+            knobRow(indices: indices, page: page)
+        } else {
+            knobColumn(indices: indices, page: page)
+        }
+    }
+
+    private func knobView(index i: Int, page: Page, width: CGFloat, height: CGFloat) -> some View {
+        let knob = page.knobs[i]
+        return Button { selection = .knob(i) } label: {
+            Group {
+                if knob.liveContent == .clock {
+                    compactClockFace()
+                } else if width > height {
+                    HStack(spacing: 6) {
+                        knobIcon(knob)
+                        Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
+                            .font(.system(size: 9))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 6)
+                } else {
+                    VStack(spacing: 4) {
+                        knobIcon(knob)
+                        Text(knob.label.isEmpty ? "K\(i + 1)" : knob.label)
+                            .font(.system(size: 9))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .foregroundStyle(.white)
+            .frame(width: width, height: height)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "16161a")))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        selection == .knob(i) ? Color.accentColor
+                        : (hoveredSelection == .knob(i) ? Color.white.opacity(0.4) : .clear),
+                        lineWidth: 3
+                    )
+            )
+            .scaleEffect(hoveredSelection == .knob(i) && selection != .knob(i) ? 1.05 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .help("Knob \(i + 1) actions")
+        .onHover { isHovering in
+            hoveredSelection = isHovering ? .knob(i)
+                : (hoveredSelection == .knob(i) ? nil : hoveredSelection)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: hoveredSelection)
+        .animation(.easeInOut(duration: 0.12), value: selection)
+    }
+
+    @ViewBuilder
+    private func knobIcon(_ knob: KnobConfig) -> some View {
+        if let stored = knob.imagePath,
+           let path = IconPath.resolved(stored),
+           let img = NSImage(contentsOfFile: path) {
+            Image(nsImage: img)
+                .renderingMode(knob.iconTint ? .template : .original)
+                .resizable().scaledToFit()
+                .frame(width: 20, height: 20)
+        } else if let symbol = knob.sfSymbol {
+            Image(systemName: symbol).font(.system(size: 16))
+        } else {
+            Image(systemName: "dial.medium").font(.system(size: 16))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func musicPanelPreview(indices: [Int], horizontal: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(hex: "16161a"))
+            musicPanelArtwork(horizontal: horizontal)
+            panelKnobTargets(indices: indices, horizontal: horizontal)
+        }
+        .frame(
+            width: horizontal ? Self.clockwiseTileGridWidth : Self.knobColumnWidth,
+            height: horizontal ? Self.knobColumnWidth : Self.clockwiseTileGridWidth
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .animation(.easeInOut(duration: 0.12), value: selection)
+    }
+
+    @ViewBuilder
+    private func musicPanelArtwork(horizontal: Bool) -> some View {
+        if horizontal {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(musicBannerAccent)
+                    .frame(width: 4)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(musicBannerTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
+                    Text(musicBannerDetail)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "music.note")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(musicBannerAccent)
+                Text(musicBannerTitle)
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(5)
+                Text(musicBannerDetail)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 5)
+        }
+    }
+
+    @ViewBuilder
+    private func panelKnobTargets(indices: [Int], horizontal: Bool) -> some View {
+        if horizontal {
+            HStack(spacing: 0) {
+                ForEach(indices, id: \.self) { panelKnobTarget(index: $0) }
+            }
+        } else {
+            VStack(spacing: 0) {
+                ForEach(indices, id: \.self) { panelKnobTarget(index: $0) }
+            }
+        }
+    }
+
+    private func panelKnobTarget(index i: Int) -> some View {
+        Button { selection = .knob(i) } label: {
+            Color.clear
+                .contentShape(Rectangle())
+                .overlay {
+                    Rectangle()
+                        .stroke(
+                            selection == .knob(i) ? Color.accentColor
+                            : (hoveredSelection == .knob(i) ? Color.white.opacity(0.25) : .clear),
+                            lineWidth: 2
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .help("Knob \(i + 1) actions")
+        .onHover { isHovering in
+            hoveredSelection = isHovering ? .knob(i)
+                : (hoveredSelection == .knob(i) ? nil : hoveredSelection)
+        }
+    }
+
+    private var musicBannerTitle: String {
+        let nowPlaying = deviceManager.musicNowPlaying
+        return nowPlaying.title.isEmpty ? "Apple Music" : nowPlaying.title
+    }
+
+    private var musicBannerDetail: String {
+        let nowPlaying = deviceManager.musicNowPlaying
+        switch nowPlaying.state {
+        case .notRunning: return "Not running"
+        case .unavailable: return "Metadata unavailable"
+        case .stopped: return "Stopped"
+        case .paused:
+            return nowPlaying.artist.isEmpty ? "Paused" : "Paused · \(nowPlaying.artist)"
+        case .playing:
+            return nowPlaying.artist.isEmpty ? "Playing" : nowPlaying.artist
+        }
+    }
+
+    private var musicBannerAccent: Color {
+        switch deviceManager.musicNowPlaying.state {
+        case .playing: return Color(hex: "fa2d48")
+        case .paused: return .orange
+        case .unavailable: return .red
+        case .notRunning, .stopped: return .secondary
         }
     }
 
@@ -585,6 +787,16 @@ extension ContentView {
         }
         .frame(width: Self.tileGridWidth)
         .padding(.horizontal, Self.knobColumnWidth + Self.knobGutter)
+    }
+
+    private func physicalButtonColumn(page: Page) -> some View {
+        VStack(spacing: 0) {
+            ForEach(0..<8, id: \.self) { i in
+                buttonView(index: i, page: page)
+                if i < 7 { Spacer(minLength: 0) }
+            }
+        }
+        .frame(height: Self.clockwiseTileGridHeight)
     }
 
     private func buttonView(index i: Int, page: Page) -> some View {
@@ -1212,6 +1424,7 @@ struct KnobInspector: View {
     @State private var isGlobal = false
     @State private var rotationMode: KnobRotationMode = .none
     @State private var obsAudio: OBSAudioTarget? = nil
+    @State private var stripContent: StripContent = .knobZones
 
     var body: some View {
         Form {
@@ -1281,6 +1494,27 @@ struct KnobInspector: View {
                     }
                 }
             }
+            Section("\(panelLocationName) display panel") {
+                Picker("Layout", selection: usesSpanningPanel) {
+                    Text("Three separate knob panels").tag(false)
+                    Text("One large panel").tag(true)
+                }
+                if stripContent.usesSpanningPanel {
+                    Picker("Panel content", selection: $stripContent) {
+                        ForEach(StripContent.allCases.filter { $0.usesSpanningPanel }) { content in
+                            Text(content.displayName).tag(content)
+                        }
+                    }
+                    Text("The large panel replaces only the three knob visuals. Click any third of it to edit that knob, and all knob actions continue to work.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if stripContent == .appleMusic {
+                        Text("macOS may ask for permission to control Music.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             Section("Actions") {
                 Picker("Rotation", selection: $rotationMode) {
                     ForEach(KnobRotationMode.allCases, id: \.self) { mode in
@@ -1323,6 +1557,20 @@ struct KnobInspector: View {
         return "Turning right \(right); left \(left). Change the direction in Settings > Device."
     }
 
+    private var panelLocationName: String {
+        if store.activeProfile.deviceOrientation == .clockwise {
+            return knobIndex < 3 ? "Top" : "Bottom"
+        }
+        return knobIndex < 3 ? "Left" : "Right"
+    }
+
+    private var usesSpanningPanel: Binding<Bool> {
+        Binding(
+            get: { stripContent.usesSpanningPanel },
+            set: { enabled in stripContent = enabled ? .appleMusic : .knobZones }
+        )
+    }
+
     private func loadCurrent() {
         isGlobal = store.isKnobGlobal(knobIndex)
         let knob = store.knobConfig(knobIndex)
@@ -1337,6 +1585,7 @@ struct KnobInspector: View {
         counterClockwise = knob.counterClockwise
         press = knob.press
         rotationMode = KnobRotationMode.detect(clockwise: knob.clockwise, counterClockwise: knob.counterClockwise)
+        stripContent = store.activeProfile.stripContent(forKnob: knobIndex)
     }
 
     private func apply() {
@@ -1355,6 +1604,13 @@ struct KnobInspector: View {
             press: press,
             obsAudio: obsAudio
         ))
+        store.updateActive { profile in
+            if knobIndex < 3 {
+                profile.leftStripContent = stripContent
+            } else {
+                profile.rightStripContent = stripContent
+            }
+        }
         deviceManager.pushCurrentPage()
     }
 }

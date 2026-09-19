@@ -206,12 +206,12 @@ final class DeviceManager: ObservableObject {
         // via the next noteInput-driven redraw or the next timer tick after.
         guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
-        let usesMusicBanner = store.activeProfile.usesMusicBanner
+        let profile = store.activeProfile
         for (i, tile) in page.tiles.enumerated() where tile.liveContent != .none {
             pushTile(i)
         }
         for (i, knob) in page.knobs.enumerated()
-        where knob.liveContent != .none && !(usesMusicBanner && i >= 3) {
+        where knob.liveContent != .none && !profile.knobZoneIsCovered(i) {
             pushKnobZone(i)
         }
     }
@@ -232,12 +232,12 @@ final class DeviceManager: ObservableObject {
     private func refreshSystemMeterTiles() {
         guard connected, !isDimmed, let store else { return }
         let page = store.resolvedCurrentPage
-        let usesMusicBanner = store.activeProfile.usesMusicBanner
+        let profile = store.activeProfile
         for (i, tile) in page.tiles.enumerated() where tile.liveContent == .systemMeter {
             pushTile(i)
         }
         for (i, knob) in page.knobs.enumerated()
-        where knob.liveContent == .systemMeter && !(usesMusicBanner && i >= 3) {
+        where knob.liveContent == .systemMeter && !profile.knobZoneIsCovered(i) {
             pushKnobZone(i)
         }
     }
@@ -436,23 +436,34 @@ final class DeviceManager: ObservableObject {
     }
 
     func refreshMusicBanner(force: Bool = false) {
-        guard connected, !isDimmed, let store, store.activeProfile.usesMusicBanner else { return }
+        guard connected, !isDimmed, let store, store.activeProfile.hasMusicPanel else { return }
         let current = MusicNowPlayingProvider.current()
         guard force || current != musicNowPlaying else { return }
         musicNowPlaying = current
-        pushMusicBanner()
+        pushMusicPanels()
     }
 
-    private func pushMusicBanner() {
-        guard let device, let store, store.activeProfile.usesMusicBanner else { return }
-        try? device.send(.setDisplayImage(
-            display: .center,
-            x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth,
-            y: 0,
-            w: 60,
-            h: 270,
-            rgb565: TileRenderer.renderMusicBanner(musicNowPlaying)
-        ))
+    private func pushMusicPanels() {
+        guard let device, let store else { return }
+        let profile = store.activeProfile
+        let strips = [
+            (content: profile.leftStripContent, x: 0),
+            (content: profile.rightStripContent,
+             x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth),
+        ]
+        for strip in strips where strip.content == .appleMusic {
+            try? device.send(.setDisplayImage(
+                display: .center,
+                x: strip.x,
+                y: 0,
+                w: 60,
+                h: 270,
+                rgb565: TileRenderer.renderMusicBanner(
+                    musicNowPlaying,
+                    orientation: profile.deviceOrientation
+                )
+            ))
+        }
     }
 
     // MARK: - Connection
@@ -686,7 +697,7 @@ final class DeviceManager: ObservableObject {
     private func pushKnobZone(_ index: Int) {
         guard let device, let store, store.resolvedCurrentPage.knobs.indices.contains(index) else { return }
         let profile = store.activeProfile
-        if profile.usesMusicBanner && index >= 3 { return }
+        if profile.knobZoneIsCovered(index) { return }
         let knob = store.resolvedCurrentPage.knobs[index]
         let x = index < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
         let y = (index % 3) * 90
@@ -786,7 +797,7 @@ final class DeviceManager: ObservableObject {
         guard let device, let store else { return }
         let profile = store.activeProfile
         let page = store.resolvedCurrentPage
-        if profile.usesMusicBanner {
+        if profile.hasMusicPanel {
             musicNowPlaying = MusicNowPlayingProvider.current()
         }
         // Capture idle state for this push so a mid-push wake does not leave
@@ -820,7 +831,7 @@ final class DeviceManager: ObservableObject {
             // Knob zones; 0 to 2 left strip (x=0), 3 to 5 right strip (x=420)
             for (i, knob) in page.knobs.enumerated() {
                 if Task.isCancelled { return }
-                if profile.usesMusicBanner && i >= 3 { continue }
+                if profile.knobZoneIsCovered(i) { continue }
                 let x = i < 3 ? 0 : RazerStreamController.centerXOffset + RazerStreamController.centerWidth
                 let y = (i % 3) * 90
                 try? device.send(.setDisplayImage(
@@ -832,15 +843,23 @@ final class DeviceManager: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(60))
             }
 
-            if profile.usesMusicBanner {
+            let strips = [
+                (content: profile.leftStripContent, x: 0),
+                (content: profile.rightStripContent,
+                 x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth),
+            ]
+            for strip in strips where strip.content == .appleMusic {
                 if Task.isCancelled { return }
                 try? device.send(.setDisplayImage(
                     display: .center,
-                    x: RazerStreamController.centerXOffset + RazerStreamController.centerWidth,
+                    x: strip.x,
                     y: 0,
                     w: 60,
                     h: 270,
-                    rgb565: TileRenderer.renderMusicBanner(musicNowPlaying)
+                    rgb565: TileRenderer.renderMusicBanner(
+                        musicNowPlaying,
+                        orientation: profile.deviceOrientation
+                    )
                 ))
                 try? await Task.sleep(for: .milliseconds(60))
             }
