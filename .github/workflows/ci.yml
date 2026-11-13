@@ -28,3 +28,21 @@ jobs:
       - name: Test RazerStreamKit
         run: swift test -v
         working-directory: Packages/RazerStreamKit
+
+      - name: Test OBSKit
+        run: swift test -v
+        working-directory: Packages/OBSKit
+
+      # A ready-to-run app for every PR, so a change can be tried on the deck
+      # without a local toolchain. Ad hoc signed; re-sign locally if needed.
+      - name: Package app
+        run: |
+          scripts/make_app.sh release
+          ditto -c -k --keepParent dist/RazerStream.app dist/RazerStream.zip
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: RazerStream-app
+          path: dist/RazerStream.zip
+          retention-days: 14

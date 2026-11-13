@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import OBSKit
 import CoreGraphics
 import RazerStreamKit
 
@@ -90,9 +91,20 @@ enum TileRenderer {
     // MARK: - Tiles (90×90)
 
     static func render(_ tile: TileConfig, toggledOn: Bool = false) -> Data {
+        render(tile, toggledOn: toggledOn, obsFace: nil)
+    }
+
+    /// `obsFace` draws an OBS page tile (title over a large value on a status
+    /// color) in place of the tile's own label, icon and color.
+    static func render(_ tile: TileConfig, toggledOn: Bool = false, obsFace: OBSFace?, holdProgress: Double? = nil) -> Data {
         let size = RazerStreamController.buttonSize
         guard let ctx = makeContext(width: size, height: size) else {
             return Data(count: size * size * 2)
+        }
+
+        if let face = obsFace {
+            drawOBSFace(face, holdProgress: holdProgress, in: ctx, canvas: size)
+            return rgb565(from: ctx, width: size, height: size)
         }
 
         ctx.setFillColor(color(fromHex: tile.colorHex))
@@ -420,6 +432,20 @@ enum TileRenderer {
         ctx.draw(image, in: CGRect(x: (CGFloat(canvas) - w) / 2,
                                    y: (CGFloat(canvas) - h) / 2,
                                    width: w, height: h))
+    }
+
+    private static func drawOBSFace(_ face: OBSFace, holdProgress: Double?, in ctx: CGContext, canvas: Int) {
+        let s = CGFloat(canvas)
+        ctx.setFillColor(color(fromHex: face.colorHex))
+        ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
+        // Hold-to-fire: the tile fills from the bottom while the finger stays down
+        if let progress = holdProgress {
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.35))
+            ctx.fill(CGRect(x: 0, y: 0, width: s, height: s * CGFloat(min(1, max(0, progress)))))
+        }
+        drawText(face.title, in: ctx, canvas: canvas, fontSize: 10, yOffset: s * 0.70)
+        let valueSize: CGFloat = face.value.count > 9 ? 12 : face.value.count > 6 ? 15 : 20
+        drawText(face.value, in: ctx, canvas: canvas, fontSize: valueSize, yOffset: s * 0.30)
     }
 
     private static func drawText(

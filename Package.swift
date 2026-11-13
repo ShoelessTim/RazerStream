@@ -13,6 +13,7 @@ let package = Package(
         // depend on just it; local path for now, a git URL once it has its
         // own repo.
         .package(path: "Packages/RazerStreamKit"),
+        .package(path: "Packages/OBSKit"),
     ],
     targets: [
         .executableTarget(
@@ -22,7 +23,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "RazerStreamApp",
-            dependencies: [.product(name: "RazerStreamKit", package: "RazerStreamKit")],
+            dependencies: [
+                .product(name: "RazerStreamKit", package: "RazerStreamKit"),
+                .product(name: "OBSKit", package: "OBSKit"),
+            ],
             path: "Sources/RazerStreamApp"
         ),
     ]
