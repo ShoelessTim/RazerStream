@@ -127,6 +127,7 @@ public enum OBSTileRole: Codable, Hashable, Sendable {
     case dropped
     case cpu
     case fps
+    case preflight       // tap to check everything before going live
 
     /// Controls that must be held, so a brush of the screen cannot go live or end a stream.
     public var requiresHold: Bool { self == .goLive }
@@ -141,6 +142,7 @@ public enum OBSTileRole: Codable, Hashable, Sendable {
         case .dropped:         return "Dropped frames"
         case .cpu:             return "OBS CPU"
         case .fps:             return "FPS"
+        case .preflight:       return "PREFLIGHT"
         }
     }
 
@@ -154,6 +156,7 @@ public enum OBSTileRole: Codable, Hashable, Sendable {
         case .dropped:         return "DROPPED"
         case .cpu:             return "OBS CPU"
         case .fps:             return "FPS"
+        case .preflight:       return "PREFLIGHT"
         }
     }
 }
@@ -181,7 +184,8 @@ public enum OBSFaces {
 
     public static func face(for role: OBSTileRole, in s: OBSSnapshot, at now: Date) -> OBSFace {
         // OBS silent: say so on every tile rather than show old numbers
-        guard s.isFresh(at: now) else {
+        // (PREFLIGHT excepted: it is how OBS gets started)
+        guard s.isFresh(at: now) || role == .preflight else {
             let reason = s.connection == .authFailed ? "PASSWORD" : "NO OBS"
             return OBSFace(title: role.shortTitle, value: reason, colorHex: unknown)
         }
@@ -238,6 +242,9 @@ public enum OBSFaces {
         case .fps:
             guard let fps = s.activeFps else { return OBSFace(title: "FPS", value: "--", colorHex: neutral) }
             return OBSFace(title: "FPS", value: "\(Int(fps.rounded()))", colorHex: neutral)
+
+        case .preflight:
+            return OBSPreflight.face(running: false, result: nil)   // the app draws the real state
         }
     }
 

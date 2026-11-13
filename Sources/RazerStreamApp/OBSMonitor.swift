@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OBSKit
 
@@ -12,6 +13,8 @@ import OBSKit
 final class OBSMonitor: ObservableObject {
 
     @Published private(set) var snapshot = OBSSnapshot()
+    @Published private(set) var preflight: OBSPreflightResult?
+    @Published private(set) var preflightRunning = false
 
     /// Called on the main actor with each alert the deck should buzz for.
     var onAlert: ((OBSAlert) -> Void)?
@@ -80,6 +83,39 @@ final class OBSMonitor: ObservableObject {
     private func send(_ command: @escaping @Sendable (OBSClient) async throws -> Void) {
         let client = client
         Task { try? await command(client) }
+    }
+
+    // MARK: - PREFLIGHT
+
+    /// Launches OBS if it is not running, waits for it to answer, then runs
+    /// every check. Results land in `preflight`; `done` gets whether all passed.
+    func runPreflight(done: @escaping @MainActor (Bool) -> Void) {
+        guard !preflightRunning else { return }
+        preflightRunning = true
+        Task { [weak self] in
+            guard let self else { return }
+            if !self.snapshot.isFresh(at: Date()) {
+                self.launchOBS()
+                for _ in 0..<40 where !self.snapshot.isFresh(at: Date()) {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+            }
+            let client = self.client
+            let keySet = try? await client.streamKeySet()
+            let freeGB = DiskSpaceMeter.reading(forVolumeAt: NSHomeDirectory())
+                .map { Double($0.freeBytes) / 1_000_000_000 }
+            let result = OBSPreflight.evaluate(self.snapshot, streamKeySet: keySet, freeDiskGB: freeGB, at: Date())
+            self.preflight = result
+            self.preflightRunning = false
+            done(result.allPassed)
+        }
+    }
+
+    private func launchOBS() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.obsproject.obs-studio") else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        NSWorkspace.shared.openApplication(at: url, configuration: config)
     }
 
     // MARK: - Connection and polling

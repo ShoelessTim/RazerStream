@@ -275,7 +275,7 @@ final class DeviceManager: ObservableObject {
         if !isDimmed {
             for (i, tile) in page.tiles.enumerated() {
                 guard let role = tile.obsRole, i != obsHoldTile else { continue }
-                let face = OBSFaces.face(for: role, in: obsMonitor.snapshot, at: Date())
+                let face = obsFace(for: role)
                 guard lastOBSFace[i] != face else { continue }
                 lastOBSFace[i] = face
                 try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face)))
@@ -299,7 +299,7 @@ final class DeviceManager: ObservableObject {
     /// A tile's image: its OBS face when it is an OBS tile, otherwise as configured.
     private func renderTile(_ index: Int, _ tile: TileConfig, holdProgress: Double? = nil) -> Data {
         if let role = tile.obsRole {
-            let face = OBSFaces.face(for: role, in: obsMonitor.snapshot, at: Date())
+            let face = obsFace(for: role)
             lastOBSFace[index] = face
             return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress)
         }
@@ -307,9 +307,21 @@ final class DeviceManager: ObservableObject {
         return TileRenderer.render(tile, toggledOn: isOn)
     }
 
+    private func obsFace(for role: OBSTileRole) -> OBSFace {
+        if role == .preflight {
+            return OBSPreflight.face(running: obsMonitor.preflightRunning, result: obsMonitor.preflight)
+        }
+        return OBSFaces.face(for: role, in: obsMonitor.snapshot, at: Date())
+    }
+
     private func handleOBSTilePress(_ role: OBSTileRole, index: Int) {
         guard role.requiresHold else {
             switch role {
+            case .preflight:
+                obsMonitor.runPreflight { [weak self] passed in
+                    // Short tick for all green, long buzz when something needs fixing
+                    try? self?.device?.send(.vibrate(passed ? .short : .long))
+                }
             case .record:          obsMonitor.toggleRecord()
             case .scene(let slot): obsMonitor.selectScene(slot: slot)
             case .mic:             obsMonitor.toggleMute(.mic)
@@ -319,12 +331,14 @@ final class DeviceManager: ObservableObject {
             return
         }
 
-        // Hold to fire: the tile fills over one second, then GO LIVE or END
-        // fires with a long buzz. Letting go early cancels with nothing sent.
+        // Hold to fire: the tile fills over one second (three when the last
+        // PREFLIGHT found a problem; ending a live stream is always one), then
+        // GO LIVE or END fires with a long buzz. Letting go early sends nothing.
+        let seconds = obsMonitor.snapshot.isLive ? 1 : OBSPreflight.goLiveHoldSeconds(after: obsMonitor.preflight)
+        let steps = Int(seconds * 4)
         obsHoldTask?.cancel()
         obsHoldTile = index
         obsHoldTask = Task { [weak self] in
-            let steps = 4
             for step in 1...steps {
                 guard let self, !Task.isCancelled else { return }
                 self.pushOBSTile(index, holdProgress: Double(step) / Double(steps))
