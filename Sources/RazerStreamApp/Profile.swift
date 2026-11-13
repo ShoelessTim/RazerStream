@@ -1,4 +1,5 @@
 import Foundation
+import OBSKit
 
 // MARK: - Actions a control can trigger
 
@@ -231,18 +232,38 @@ struct KnobConfig: Codable, Equatable {
     }
 }
 
+// MARK: - Button LED source
+
+/// What a physical button's LED shows: its fixed color, or a live status
+/// light (green OK, amber degraded or unknown, red down).
+enum LEDSource: Codable, Hashable {
+    case fixed
+    case obs(OBSIndicator)
+
+    var displayName: String {
+        switch self {
+        case .fixed:              return "Fixed color"
+        case .obs(let indicator): return indicator.displayName
+        }
+    }
+
+    static let allChoices: [LEDSource] = [.fixed] + OBSIndicator.allCases.map { .obs($0) }
+}
+
 struct ButtonConfig: Codable, Equatable {
     var action: ControlAction = .none
     var releaseAction: ControlAction = .none
     var mode: ControlMode = .tap
     var ledHex: String = "000000"     // LED color; button 0 is the status light
+    var ledSource: LEDSource = .fixed // .obs(...) overrides ledHex with a live status color
 
     init(action: ControlAction = .none, releaseAction: ControlAction = .none,
-         mode: ControlMode = .tap, ledHex: String = "000000") {
+         mode: ControlMode = .tap, ledHex: String = "000000", ledSource: LEDSource = .fixed) {
         self.action = action
         self.releaseAction = releaseAction
         self.mode = mode
         self.ledHex = ledHex
+        self.ledSource = ledSource
     }
 
     init(from decoder: Decoder) throws {
@@ -251,6 +272,7 @@ struct ButtonConfig: Codable, Equatable {
         releaseAction = try c.decodeIfPresent(ControlAction.self, forKey: .releaseAction) ?? .none
         mode = try c.decodeIfPresent(ControlMode.self, forKey: .mode) ?? .tap
         ledHex = try c.decodeIfPresent(String.self, forKey: .ledHex) ?? "000000"
+        ledSource = try c.decodeIfPresent(LEDSource.self, forKey: .ledSource) ?? .fixed
     }
 }
 

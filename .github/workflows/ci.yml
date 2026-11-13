@@ -28,3 +28,7 @@ jobs:
       - name: Test RazerStreamKit
         run: swift test -v
         working-directory: Packages/RazerStreamKit
+
+      - name: Test OBSKit
+        run: swift test -v
+        working-directory: Packages/OBSKit

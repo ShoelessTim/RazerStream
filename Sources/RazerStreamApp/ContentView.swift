@@ -1335,6 +1335,7 @@ struct ButtonInspector: View {
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
     @State private var ledHex = "000000"
+    @State private var ledSource: LEDSource = .fixed
     @State private var isGlobal = false
 
     private var isStatusLight: Bool { buttonIndex == 0 }
@@ -1358,7 +1359,18 @@ struct ButtonInspector: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    LEDColorPicker(hex: $ledHex, buttonIndex: buttonIndex)
+                    Picker("LED shows", selection: $ledSource) {
+                        ForEach(LEDSource.allChoices, id: \.self) { source in
+                            Text(source.displayName).tag(source)
+                        }
+                    }
+                    if ledSource == .fixed {
+                        LEDColorPicker(hex: $ledHex, buttonIndex: buttonIndex)
+                    } else {
+                        Text("Green when OK, amber when degraded or OBS is not answering, red when down. Uses the WebSocket password OBS saved on this Mac; nothing to enter here.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             Button("Apply") { apply() }
@@ -1385,6 +1397,7 @@ struct ButtonInspector: View {
         releaseAction = button.releaseAction
         mode = button.mode
         ledHex = button.ledHex
+        ledSource = button.ledSource
     }
 
     /// Re-lights a button from what is actually saved, undoing any preview.
@@ -1403,7 +1416,8 @@ struct ButtonInspector: View {
             action: action,
             releaseAction: releaseAction,
             mode: mode,
-            ledHex: isStatusLight ? "000000" : ledHex
+            ledHex: isStatusLight ? "000000" : ledHex,
+            ledSource: isStatusLight ? .fixed : ledSource
         ))
         deviceManager.pushCurrentPage()
     }

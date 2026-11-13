@@ -1,4 +1,5 @@
 import Foundation
+import OBSKit
 import RazerStreamKit
 
 // Owns the device connection for the app's lifetime: connects, auto-reconnects,
@@ -21,6 +22,12 @@ final class DeviceManager: ObservableObject {
     private var liveTileTask: Task<Void, Never>?
     private var systemMeterTask: Task<Void, Never>?
     private var idleCheckTask: Task<Void, Never>?
+    private var obsLEDTask: Task<Void, Never>?
+    let obsMonitor = OBSMonitor()
+    /// Last color written to each OBS-driven LED (by button index), so the
+    /// once-a-second refresh only touches the serial port when a light changes.
+    private var lastOBSLEDWrite: [Int: String] = [:]
+    private var lastPushAt = Date.distantPast
     private let appSwitchMonitor = AppSwitchMonitor()
     weak var store: ProfileStore?
 
@@ -47,6 +54,8 @@ final class DeviceManager: ObservableObject {
         startLiveTileClock()
         startSystemMeterClock()
         startIdleCheck()
+        obsMonitor.start()
+        startOBSLEDClock()
         appSwitchMonitor.start(store: store, deviceManager: self)
     }
 
@@ -59,6 +68,8 @@ final class DeviceManager: ObservableObject {
         liveTileTask?.cancel()
         systemMeterTask?.cancel()
         idleCheckTask?.cancel()
+        obsLEDTask?.cancel()
+        obsMonitor.stop()
         appSwitchMonitor.stop()
         device?.close()
         device = nil
@@ -142,11 +153,13 @@ final class DeviceManager: ObservableObject {
     /// ledWriteTask so dim/wake and pushBrightness do not stack races.
     private func setButtonLEDs(device: RazerStreamDevice, page: Page, dimmed: Bool) {
         let scale = ledBrightnessScale * (dimmed ? Self.dimmedLEDFactor : 1)
+        lastOBSLEDWrite = [:]
+        lastPushAt = Date()
         ledWriteTask?.cancel()
         ledWriteTask = Task {
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
-                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: scale)
+                let (r, g, b) = Self.scaledRGB(fromHex: self.ledHex(for: button), scale: scale)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
@@ -212,6 +225,55 @@ final class DeviceManager: ObservableObject {
         }
         for (i, knob) in page.knobs.enumerated() where knob.liveContent == .systemMeter {
             pushKnobZone(i)
+        }
+    }
+
+    // MARK: - OBS status LEDs
+
+    /// The color a button's LED should show right now: its fixed color, or
+    /// the live OBS status color when the button is set to track OBS.
+    func ledHex(for button: ButtonConfig) -> String {
+        switch button.ledSource {
+        case .fixed:
+            return button.ledHex
+        case .obs(let indicator):
+            return OBSLights.light(for: indicator, in: obsMonitor.snapshot, at: Date()).hex
+        }
+    }
+
+    /// Once a second, re-evaluates every OBS-driven LED on the current page
+    /// and writes only the ones whose color changed. Runs on a clock rather
+    /// than on OBS updates so a silent OBS still turns lights amber (stale)
+    /// instead of freezing them on their last color. Keeps running while
+    /// idle-dimmed (at the dimmed scale): status lights matter most when
+    /// nobody is touching the deck.
+    private func startOBSLEDClock() {
+        obsLEDTask?.cancel()
+        obsLEDTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+                await self?.refreshOBSLEDs()
+            }
+        }
+    }
+
+    private func refreshOBSLEDs() async {
+        guard connected, let device, let store else { return }
+        // A page push or brightness change writes every LED itself; stay off
+        // the serial port while that is in flight so writes do not interleave.
+        guard Date().timeIntervalSince(lastPushAt) > 2 else { return }
+        let page = store.resolvedCurrentPage
+        let scale = effectiveLEDScale
+        for (i, button) in page.buttons.enumerated() where i > 0 {
+            guard case .obs = button.ledSource else { continue }
+            let hex = ledHex(for: button)
+            let key = "\(hex)@\(scale)"
+            guard lastOBSLEDWrite[i] != key else { continue }
+            lastOBSLEDWrite[i] = key
+            let (r, g, b) = Self.scaledRGB(fromHex: hex, scale: scale)
+            try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
+            try? await Task.sleep(for: .milliseconds(20))
         }
     }
 
@@ -371,7 +433,8 @@ final class DeviceManager: ObservableObject {
             toggleStates[key] = nowOn
             run(nowOn ? button.action : button.releaseAction)
             // LED shows state: configured color when on, off when off
-            if index > 0, let device {
+            // (OBS-tracking LEDs keep showing status instead)
+            if index > 0, let device, button.ledSource == .fixed {
                 let (r, g, b) = nowOn ? Self.scaledRGB(fromHex: button.ledHex, scale: ledBrightnessScale) : (0, 0, 0)
                 try? device.send(.setButtonColor(button: 7 + index, r: r, g: g, b: b))
             }
@@ -405,6 +468,9 @@ final class DeviceManager: ObservableObject {
     /// pushes need. Index 0 is the status light and is never written.
     func previewButtonLED(_ index: Int, hex: String) {
         guard let device, index > 0 else { return }
+        // Bypasses the OBS LED cache; forget this button so the next status
+        // tick puts its live color back if it tracks OBS.
+        lastOBSLEDWrite[index] = nil
         let (r, g, b) = Self.scaledRGB(fromHex: hex, scale: effectiveLEDScale)
         try? device.send(.setButtonColor(button: 7 + index, r: r, g: g, b: b))
     }
@@ -502,11 +568,13 @@ final class DeviceManager: ObservableObject {
 
         brightnessTask?.cancel()
         ledWriteTask?.cancel()
+        lastOBSLEDWrite = [:]
+        lastPushAt = Date()
         brightnessTask = Task {
             try? device.send(.setBrightness(screenLevel))
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
-                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
+                let (r, g, b) = Self.scaledRGB(fromHex: self.ledHex(for: button), scale: ledScale)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
@@ -532,6 +600,8 @@ final class DeviceManager: ObservableObject {
         // device's serial buffer and nothing renders
         pushTask?.cancel()
         ledWriteTask?.cancel()
+        lastOBSLEDWrite = [:]
+        lastPushAt = Date()
         pushTask = Task {
             if choreography {
                 await self.runLEDCascade(device: device, page: page)
@@ -564,7 +634,7 @@ final class DeviceManager: ObservableObject {
             // status light; the device manages it, never write it.
             for (i, button) in page.buttons.enumerated() where i > 0 {
                 if Task.isCancelled { return }
-                let (r, g, b) = Self.scaledRGB(fromHex: button.ledHex, scale: ledScale)
+                let (r, g, b) = Self.scaledRGB(fromHex: self.ledHex(for: button), scale: ledScale)
                 try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
                 try? await Task.sleep(for: .milliseconds(20))
             }
