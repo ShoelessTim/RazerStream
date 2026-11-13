@@ -298,7 +298,7 @@ extension Page {
         let roles: [OBSTileRole] = [
             .goLive, .record, .scene(0), .scene(1),
             .mic,    .scene(2), .scene(3), .scene(4),
-            .bitrate, .dropped, .cpu, .fps,
+            .bitrate, .dropped, .cpu, .preflight,
         ]
         page.tiles = roles.map { TileConfig(obsRole: $0) }
         page.knobs[0] = KnobConfig(label: "MIC", sfSymbol: "mic.fill", obsAudio: .mic)

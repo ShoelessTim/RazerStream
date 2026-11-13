@@ -130,6 +130,15 @@ public actor OBSClient {
         _ = try await request("SetCurrentProgramScene", data: ["sceneName": .string(name)])
     }
 
+    /// Whether a stream key (or custom-server key) is filled in. The key itself never leaves this method.
+    public func streamKeySet() async throws -> Bool {
+        let data = try await request("GetStreamServiceSettings")
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let settings = object?["streamServiceSettings"] as? [String: Any]
+        let key = settings?["key"] as? String ?? ""
+        return !key.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     public func toggleStream() async throws { _ = try await request("ToggleStream") }
     public func toggleRecord() async throws { _ = try await request("ToggleRecord") }
 

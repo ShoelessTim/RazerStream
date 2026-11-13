@@ -1054,7 +1054,7 @@ struct TileInspector: View {
     @State private var showSymbolPicker = false
 
     private static let obsRoles: [OBSTileRole] = [.goLive, .record] + (0..<8).map { .scene($0) }
-        + [.mic, .bitrate, .dropped, .cpu, .fps]
+        + [.mic, .bitrate, .dropped, .cpu, .fps, .preflight]
 
     var body: some View {
         Form {

@@ -247,3 +247,43 @@ final class OBSPageTests: XCTestCase {
         XCTAssertEqual(alerts, [.micMutedWhileLive, .micMutedWhileLive])
     }
 }
+
+final class OBSPreflightTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 20_000)
+
+    func ready() -> OBSSnapshot {
+        var s = OBSSnapshot(connection: .connected, stream: OBSOutputStatus(outputActive: false),
+                            record: OBSOutputStatus(outputActive: false), lastUpdate: now)
+        s.micInput = "Mic/Aux"
+        s.micMuted = false
+        s.scenes = ["Cam", "Screen"]
+        return s
+    }
+
+    func testAllGreen() {
+        let result = OBSPreflight.evaluate(ready(), streamKeySet: true, freeDiskGB: 200, at: now)
+        XCTAssertTrue(result.allPassed)
+        XCTAssertEqual(OBSPreflight.face(running: false, result: result).value, "ALL GREEN")
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: result), 1)
+    }
+
+    func testFailuresNameTheProblemAndLengthenTheHold() {
+        var s = ready()
+        s.micMuted = true
+        let result = OBSPreflight.evaluate(s, streamKeySet: false, freeDiskGB: 3, at: now)
+        XCTAssertEqual(result.failures.map(\.item), [.mic, .streamKey, .disk])
+        XCTAssertEqual(OBSPreflight.face(running: false, result: result).value, "MIC MUTED +2")
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: result), 3)
+    }
+
+    func testUnknownsFail() {
+        let result = OBSPreflight.evaluate(OBSSnapshot(), streamKeySet: nil, freeDiskGB: nil, at: now)
+        XCTAssertEqual(result.failures.count, OBSPreflightCheck.Item.allCases.count)
+        XCTAssertEqual(result.checks.first?.detail, "NO OBS")
+    }
+
+    func testNeverRunIsNormalHold() {
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: nil), 1)
+        XCTAssertEqual(OBSPreflight.face(running: false, result: nil).value, "PREFLIGHT")
+    }
+}
