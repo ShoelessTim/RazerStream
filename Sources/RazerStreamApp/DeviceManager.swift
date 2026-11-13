@@ -27,6 +27,10 @@ final class DeviceManager: ObservableObject {
     /// Last color written to each OBS-driven LED (by button index), so the
     /// once-a-second refresh only touches the serial port when a light changes.
     private var lastOBSLEDWrite: [Int: String] = [:]
+    /// Last face drawn on each OBS tile (by tile index), for the same reason.
+    private var lastOBSFace: [Int: OBSFace] = [:]
+    private var obsHoldTask: Task<Void, Never>?
+    private var obsHoldTile: Int?
     private var lastPushAt = Date.distantPast
     private let appSwitchMonitor = AppSwitchMonitor()
     weak var store: ProfileStore?
@@ -54,6 +58,7 @@ final class DeviceManager: ObservableObject {
         startLiveTileClock()
         startSystemMeterClock()
         startIdleCheck()
+        obsMonitor.onAlert = { [weak self] alert in self?.buzz(for: alert) }
         obsMonitor.start()
         startOBSLEDClock()
         appSwitchMonitor.start(store: store, deviceManager: self)
@@ -264,6 +269,20 @@ final class DeviceManager: ObservableObject {
         // the serial port while that is in flight so writes do not interleave.
         guard Date().timeIntervalSince(lastPushAt) > 2 else { return }
         let page = store.resolvedCurrentPage
+
+        // OBS tiles: redraw only the ones whose face changed (skipped while
+        // dimmed, like other live tiles, and while a hold is filling a tile)
+        if !isDimmed {
+            for (i, tile) in page.tiles.enumerated() {
+                guard let role = tile.obsRole, i != obsHoldTile else { continue }
+                let face = OBSFaces.face(for: role, in: obsMonitor.snapshot, at: Date())
+                guard lastOBSFace[i] != face else { continue }
+                lastOBSFace[i] = face
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face)))
+                try? await Task.sleep(for: .milliseconds(60))
+            }
+        }
+
         let scale = effectiveLEDScale
         for (i, button) in page.buttons.enumerated() where i > 0 {
             guard case .obs = button.ledSource else { continue }
@@ -274,6 +293,80 @@ final class DeviceManager: ObservableObject {
             let (r, g, b) = Self.scaledRGB(fromHex: hex, scale: scale)
             try? device.send(.setButtonColor(button: 7 + i, r: r, g: g, b: b))
             try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// A tile's image: its OBS face when it is an OBS tile, otherwise as configured.
+    private func renderTile(_ index: Int, _ tile: TileConfig, holdProgress: Double? = nil) -> Data {
+        if let role = tile.obsRole {
+            let face = OBSFaces.face(for: role, in: obsMonitor.snapshot, at: Date())
+            lastOBSFace[index] = face
+            return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress)
+        }
+        let isOn = toggleStates[toggleKey(tile: index)] ?? false
+        return TileRenderer.render(tile, toggledOn: isOn)
+    }
+
+    private func handleOBSTilePress(_ role: OBSTileRole, index: Int) {
+        guard role.requiresHold else {
+            switch role {
+            case .record:          obsMonitor.toggleRecord()
+            case .scene(let slot): obsMonitor.selectScene(slot: slot)
+            case .mic:             obsMonitor.toggleMute(.mic)
+            default:               return   // readouts do nothing on press
+            }
+            pushTile(index)   // show the change now; the next poll confirms it
+            return
+        }
+
+        // Hold to fire: the tile fills over one second, then GO LIVE or END
+        // fires with a long buzz. Letting go early cancels with nothing sent.
+        obsHoldTask?.cancel()
+        obsHoldTile = index
+        obsHoldTask = Task { [weak self] in
+            let steps = 4
+            for step in 1...steps {
+                guard let self, !Task.isCancelled else { return }
+                self.pushOBSTile(index, holdProgress: Double(step) / Double(steps))
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.obsMonitor.toggleStream()
+            try? self.device?.send(.vibrate(.long))
+            self.obsHoldTile = nil
+            self.lastOBSFace[index] = nil
+            self.pushOBSTile(index, holdProgress: nil)
+        }
+    }
+
+    private func cancelOBSHold(index: Int) {
+        guard obsHoldTile == index else { return }
+        obsHoldTask?.cancel()
+        obsHoldTask = nil
+        obsHoldTile = nil
+        pushOBSTile(index, holdProgress: nil)
+    }
+
+    private func pushOBSTile(_ index: Int, holdProgress: Double?) {
+        guard let device, let store, store.currentPage.tiles.indices.contains(index) else { return }
+        let tile = store.currentPage.tiles[index]
+        try? device.send(.setButtonImage(button: index, rgb565: renderTile(index, tile, holdProgress: holdProgress)))
+    }
+
+    /// Haptic alerts; the deck is often the only thing in reach, so trouble is felt, not just shown.
+    private func buzz(for alert: OBSAlert) {
+        guard let device else { return }
+        switch alert {
+        case .streamDropped:
+            try? device.send(.vibrate(.veryLong))
+            Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                try? device.send(.vibrate(.veryLong))
+            }
+        case .framesDropping:
+            try? device.send(.vibrate(.long))
+        case .micMutedWhileLive:
+            try? device.send(.vibrate(.short))
         }
     }
 
@@ -347,7 +440,13 @@ final class DeviceManager: ObservableObject {
             noteInput()
             if pressed { HapticFeedback.trigger(on: device) }
             if id >= 1 && id <= 6 {
-                if pressed { run(page.knobs[id - 1].press) }
+                if pressed {
+                    if let target = page.knobs[id - 1].obsAudio {
+                        obsMonitor.toggleMute(target)
+                    } else {
+                        run(page.knobs[id - 1].press)
+                    }
+                }
             } else if id >= 7 && id <= 14 {
                 handleButton(index: id - 7, pressed: pressed, page: page)
             }
@@ -360,7 +459,11 @@ final class DeviceManager: ObservableObject {
             let sinceLast = lastKnobRotate[id].map { now.timeIntervalSince($0) } ?? .infinity
             lastKnobRotate[id] = now
             let amount = sinceLast < Self.fastTurnInterval ? 3 : 1
-            run(delta > 0 ? knob.clockwise : knob.counterClockwise, amount: amount)
+            if let target = knob.obsAudio {
+                obsMonitor.nudgeVolume(target, steps: delta > 0 ? amount : -amount)
+            } else {
+                run(delta > 0 ? knob.clockwise : knob.counterClockwise, amount: amount)
+            }
 
         case .touchStart(let x, let y, let touchID):
             noteInput()
@@ -391,6 +494,10 @@ final class DeviceManager: ObservableObject {
 
     private func handleTilePress(index: Int, page: Page) {
         let tile = page.tiles[index]
+        if let role = tile.obsRole {
+            handleOBSTilePress(role, index: index)
+            return
+        }
         switch tile.mode {
         case .tap, .momentary:
             run(tile.action)
@@ -409,6 +516,10 @@ final class DeviceManager: ObservableObject {
 
     private func handleTileRelease(index: Int, page: Page) {
         let tile = page.tiles[index]
+        if tile.obsRole != nil {
+            cancelOBSHold(index: index)
+            return
+        }
         switch tile.mode {
         case .momentary:
             run(tile.releaseAction)
@@ -480,11 +591,7 @@ final class DeviceManager: ObservableObject {
     private func pushTile(_ index: Int) {
         guard let device, let store else { return }
         let tile = store.currentPage.tiles[index]
-        let isOn = toggleStates[toggleKey(tile: index)] ?? false
-        try? device.send(.setButtonImage(
-            button: index,
-            rgb565: TileRenderer.render(tile, toggledOn: isOn)
-        ))
+        try? device.send(.setButtonImage(button: index, rgb565: renderTile(index, tile)))
     }
 
     /// Redraw a single knob zone (used when a live knob refreshes). Reads
@@ -601,6 +708,7 @@ final class DeviceManager: ObservableObject {
         pushTask?.cancel()
         ledWriteTask?.cancel()
         lastOBSLEDWrite = [:]
+        lastOBSFace = [:]
         lastPushAt = Date()
         pushTask = Task {
             if choreography {
@@ -613,8 +721,7 @@ final class DeviceManager: ObservableObject {
 
             for (i, tile) in page.tiles.enumerated() {
                 if Task.isCancelled { return }
-                let isOn = toggleStates[toggleKey(tile: i)] ?? false
-                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, toggledOn: isOn)))
+                try? device.send(.setButtonImage(button: i, rgb565: self.renderTile(i, tile)))
                 try? await Task.sleep(for: .milliseconds(60))
             }
 

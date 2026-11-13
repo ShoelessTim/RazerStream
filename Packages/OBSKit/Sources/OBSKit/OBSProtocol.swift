@@ -98,14 +98,59 @@ public struct OBSOutputStatus: Codable, Equatable, Sendable {
     public var outputDuration: Double?
     public var outputSkippedFrames: Int?
     public var outputTotalFrames: Int?
+    public var outputBytes: Double?
 
     public init(outputActive: Bool, outputReconnecting: Bool? = nil, outputPaused: Bool? = nil,
-                outputDuration: Double? = nil, outputSkippedFrames: Int? = nil, outputTotalFrames: Int? = nil) {
+                outputDuration: Double? = nil, outputSkippedFrames: Int? = nil, outputTotalFrames: Int? = nil,
+                outputBytes: Double? = nil) {
         self.outputActive = outputActive
         self.outputReconnecting = outputReconnecting
         self.outputPaused = outputPaused
         self.outputDuration = outputDuration
         self.outputSkippedFrames = outputSkippedFrames
         self.outputTotalFrames = outputTotalFrames
+        self.outputBytes = outputBytes
+    }
+}
+
+/// A request parameter value; keeps request data Sendable across the actor.
+public enum OBSParam: Sendable, Equatable {
+    case string(String)
+    case double(Double)
+    case bool(Bool)
+
+    var jsonValue: Any {
+        switch self {
+        case .string(let v): return v
+        case .double(let v): return v
+        case .bool(let v):   return v
+        }
+    }
+}
+
+/// GetStats responseData (the parts the deck shows).
+public struct OBSStats: Codable, Equatable, Sendable {
+    public var cpuUsage: Double?
+    public var activeFps: Double?
+
+    public init(cpuUsage: Double? = nil, activeFps: Double? = nil) {
+        self.cpuUsage = cpuUsage
+        self.activeFps = activeFps
+    }
+}
+
+/// GetSceneList responseData.
+public struct OBSSceneList: Codable, Equatable, Sendable {
+    public struct Scene: Codable, Equatable, Sendable {
+        public var sceneName: String
+        public var sceneIndex: Int
+    }
+    public var currentProgramSceneName: String?
+    public var scenes: [Scene]
+
+    /// Names in the order OBS shows them, top of the Scenes list first. The
+    /// server reports the bottom scene as index 0.
+    public var namesTopFirst: [String] {
+        scenes.sorted { $0.sceneIndex > $1.sceneIndex }.map(\.sceneName)
     }
 }

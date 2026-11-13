@@ -106,6 +106,11 @@ struct RazerStreamApp: App {
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!deviceManager.connected)
 
+                Button("Add OBS Page") {
+                    store.addOBSPage()
+                    deviceManager.pushCurrentPage()
+                }
+
                 Button("Redraw Page on Device") {
                     deviceManager.pushCurrentPage()
                 }

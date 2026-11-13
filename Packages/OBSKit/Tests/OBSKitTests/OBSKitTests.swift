@@ -148,3 +148,102 @@ private extension Result {
         return nil
     }
 }
+
+final class OBSPageTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 10_000)
+
+    func liveSnapshot(skipped: Int = 0, total: Int = 0, micMuted: Bool = false) -> OBSSnapshot {
+        var s = OBSSnapshot(connection: .connected,
+                            stream: OBSOutputStatus(outputActive: true, outputReconnecting: false,
+                                                    outputDuration: 3_725_000, outputSkippedFrames: skipped,
+                                                    outputTotalFrames: total),
+                            record: OBSOutputStatus(outputActive: false), lastUpdate: now)
+        s.micMuted = micMuted
+        return s
+    }
+
+    func testSceneListTopFirst() throws {
+        let raw = #"{"currentProgramSceneName":"Cam","scenes":[{"sceneName":"BRB","sceneIndex":0},{"sceneName":"Screen","sceneIndex":1},{"sceneName":"Cam","sceneIndex":2}]}"#
+        let list = try JSONDecoder().decode(OBSSceneList.self, from: Data(raw.utf8))
+        XCTAssertEqual(list.namesTopFirst, ["Cam", "Screen", "BRB"])
+    }
+
+    func testGoLiveFaceShowsUptimeWhenLive() {
+        let face = OBSFaces.face(for: .goLive, in: liveSnapshot(), at: now)
+        XCTAssertEqual(face.value, "1:02:05")
+    }
+
+    func testEveryTileSaysNoOBSWhenStale() {
+        var stale = liveSnapshot()
+        stale.lastUpdate = now.addingTimeInterval(-30)
+        for role in [OBSTileRole.goLive, .record, .scene(0), .mic, .bitrate, .dropped, .cpu, .fps] {
+            XCTAssertEqual(OBSFaces.face(for: role, in: stale, at: now).value, "NO OBS")
+        }
+    }
+
+    func testSceneFaceMarksOnAir() {
+        var s = liveSnapshot()
+        s.scenes = ["Cam", "Screen"]
+        s.currentScene = "Screen"
+        XCTAssertEqual(OBSFaces.face(for: .scene(1), in: s, at: now).title, "ON AIR")
+        XCTAssertEqual(OBSFaces.face(for: .scene(0), in: s, at: now).title, "SCENE 1")
+        XCTAssertEqual(OBSFaces.face(for: .scene(5), in: s, at: now).value, "none")
+    }
+
+    func testMicLightRedOnlyWhenMutedLive() {
+        XCTAssertEqual(OBSLights.light(for: .mic, in: liveSnapshot(micMuted: true), at: now), .red)
+        var idle = liveSnapshot(micMuted: true)
+        idle.stream = OBSOutputStatus(outputActive: false)
+        XCTAssertEqual(OBSLights.light(for: .mic, in: idle, at: now), .amber)
+        XCTAssertEqual(OBSLights.light(for: .mic, in: liveSnapshot(), at: now), .green)
+    }
+
+    func testBitrate() {
+        let kbps = OBSRates.kbps(fromBytes: 0, at: now, toBytes: 750_000, at: now.addingTimeInterval(1))
+        XCTAssertEqual(kbps ?? 0, 6000, accuracy: 0.1)
+        XCTAssertNil(OBSRates.kbps(fromBytes: 10, at: now, toBytes: 5, at: now.addingTimeInterval(1)))
+    }
+
+    func testStreamDropAlertsButEndDoesNot() {
+        var tracker = OBSAlertTracker()
+        XCTAssertEqual(tracker.update(liveSnapshot(), at: now), [])
+        var stopped = liveSnapshot()
+        stopped.stream = OBSOutputStatus(outputActive: false)
+        XCTAssertEqual(tracker.update(stopped, at: now.addingTimeInterval(1)), [.streamDropped])
+
+        var ended = OBSAlertTracker()
+        _ = ended.update(liveSnapshot(), at: now)
+        ended.noteUserEndedStream(at: now)
+        XCTAssertEqual(ended.update(stopped, at: now.addingTimeInterval(1)), [])
+    }
+
+    func testOBSGoingSilentWhileLiveAlerts() {
+        var tracker = OBSAlertTracker()
+        _ = tracker.update(liveSnapshot(), at: now)
+        XCTAssertEqual(tracker.update(liveSnapshot(), at: now.addingTimeInterval(30)), [.streamDropped])
+    }
+
+    func testFramesDroppingAfterWindow() {
+        var tracker = OBSAlertTracker()
+        var alerts: [OBSAlert] = []
+        for second in 0...10 {
+            let t = now.addingTimeInterval(Double(second))
+            var s = liveSnapshot(skipped: second * 6, total: second * 60)   // 10% dropped
+            s.lastUpdate = t
+            alerts += tracker.update(s, at: t)
+        }
+        XCTAssertEqual(alerts, [.framesDropping])
+    }
+
+    func testMicMutedReminderEveryMinute() {
+        var tracker = OBSAlertTracker()
+        var alerts: [OBSAlert] = []
+        for second in stride(from: 0, through: 125, by: 5) {
+            let t = now.addingTimeInterval(Double(second))
+            var s = liveSnapshot(micMuted: true)
+            s.lastUpdate = t
+            alerts += tracker.update(s, at: t)
+        }
+        XCTAssertEqual(alerts, [.micMutedWhileLive, .micMutedWhileLive])
+    }
+}

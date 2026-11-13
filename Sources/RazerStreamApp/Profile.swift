@@ -155,12 +155,13 @@ struct TileConfig: Codable, Equatable {
     var action: ControlAction = .none
     var releaseAction: ControlAction = .none   // toggle-off / momentary-release
     var mode: ControlMode = .tap
+    var obsRole: OBSTileRole? = nil   // OBS page tile: overrides label, icon, action and mode
 
     init(label: String = "", colorHex: String = "333333", sfSymbol: String? = nil,
          altSymbol: String? = nil, imagePath: String? = nil, iconTint: Bool = false,
          liveContent: LiveContent = .none, diskSpaceVolume: String = "/",
          action: ControlAction = .none, releaseAction: ControlAction = .none,
-         mode: ControlMode = .tap) {
+         mode: ControlMode = .tap, obsRole: OBSTileRole? = nil) {
         self.label = label
         self.colorHex = colorHex
         self.sfSymbol = sfSymbol
@@ -172,11 +173,13 @@ struct TileConfig: Codable, Equatable {
         self.action = action
         self.releaseAction = releaseAction
         self.mode = mode
+        self.obsRole = obsRole
     }
 
     // Tolerant decoding so profiles saved by older builds keep loading
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        obsRole = try c.decodeIfPresent(OBSTileRole.self, forKey: .obsRole)
         label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
         colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "333333"
         sfSymbol = try c.decodeIfPresent(String.self, forKey: .sfSymbol)
@@ -201,11 +204,12 @@ struct KnobConfig: Codable, Equatable {
     var clockwise: ControlAction = .none
     var counterClockwise: ControlAction = .none
     var press: ControlAction = .none
+    var obsAudio: OBSAudioTarget? = nil   // OBS page knob: turn for volume, press to mute
 
     init(label: String = "", sfSymbol: String? = nil, imagePath: String? = nil,
          iconTint: Bool = false, liveContent: LiveContent = .none, diskSpaceVolume: String = "/",
          clockwise: ControlAction = .none, counterClockwise: ControlAction = .none,
-         press: ControlAction = .none) {
+         press: ControlAction = .none, obsAudio: OBSAudioTarget? = nil) {
         self.label = label
         self.sfSymbol = sfSymbol
         self.imagePath = imagePath
@@ -215,11 +219,13 @@ struct KnobConfig: Codable, Equatable {
         self.clockwise = clockwise
         self.counterClockwise = counterClockwise
         self.press = press
+        self.obsAudio = obsAudio
     }
 
     // Tolerant decoding so profiles saved by older builds keep loading
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        obsAudio = try c.decodeIfPresent(OBSAudioTarget.self, forKey: .obsAudio)
         label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
         sfSymbol = try c.decodeIfPresent(String.self, forKey: .sfSymbol)
         imagePath = try c.decodeIfPresent(String.self, forKey: .imagePath)
@@ -284,6 +290,26 @@ struct Page: Codable, Equatable, Identifiable {
     var tiles: [TileConfig] = Array(repeating: TileConfig(), count: 12)
     var knobs: [KnobConfig] = Array(repeating: KnobConfig(), count: 6)
     var buttons: [ButtonConfig] = Array(repeating: ButtonConfig(), count: 8)
+}
+
+extension Page {
+    static func obsTemplate() -> Page {
+        var page = Page(name: "OBS")
+        let roles: [OBSTileRole] = [
+            .goLive, .record, .scene(0), .scene(1),
+            .mic,    .scene(2), .scene(3), .scene(4),
+            .bitrate, .dropped, .cpu, .fps,
+        ]
+        page.tiles = roles.map { TileConfig(obsRole: $0) }
+        page.knobs[0] = KnobConfig(label: "MIC", sfSymbol: "mic.fill", obsAudio: .mic)
+        page.knobs[3] = KnobConfig(label: "DESK", sfSymbol: "speaker.wave.2.fill", obsAudio: .desktop)
+        // Right-hand buttons, so lights pinned on the left stay as they are
+        let lights: [Int: OBSIndicator] = [4: .mic, 5: .connection, 6: .stream, 7: .record]
+        for (index, indicator) in lights {
+            page.buttons[index] = ButtonConfig(ledSource: .obs(indicator))
+        }
+        return page
+    }
 }
 
 // MARK: - Profile: a set of pages + device settings
@@ -672,6 +698,14 @@ final class ProfileStore: ObservableObject {
 
     func addPage() {
         updateActive { $0.pages.append(Page(name: "Page \($0.pages.count + 1)")) }
+        currentPageIndex = activeProfile.pages.count - 1
+    }
+
+    /// Adds a ready-made page that runs and monitors an OBS stream: GO LIVE,
+    /// record, five scene slots filled from OBS, mic, and a health row; mic and
+    /// desktop audio on the top knobs; status lights on the right-hand buttons.
+    func addOBSPage() {
+        updateActive { $0.pages.append(Page.obsTemplate()) }
         currentPageIndex = activeProfile.pages.count - 1
     }
 

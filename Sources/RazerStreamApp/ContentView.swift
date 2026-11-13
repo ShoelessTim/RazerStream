@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Combine
 import UniformTypeIdentifiers
+import OBSKit
 import RazerStreamKit
 
 enum Selection: Equatable {
@@ -423,7 +424,14 @@ extension ContentView {
                     // Quantized to the tile panel's real 16-bit RGB565 depth,
                     // so this preview matches what the device actually shows
                     .fill(Color.quantizedToTilePanel(hex: tile.colorHex))
-                if tile.liveContent == .clock {
+                if let role = tile.obsRole {
+                    VStack(spacing: 2) {
+                        Text("OBS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+                        Text(role.displayName).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(4)
+                } else if tile.liveContent == .clock {
                     clockFace()
                 } else if let stored = tile.imagePath,
                           let path = IconPath.resolved(stored),
@@ -439,7 +447,7 @@ extension ContentView {
                         .font(.system(size: 30))
                         .foregroundStyle(.white)
                 }
-                if tile.liveContent == .none {
+                if tile.liveContent == .none && tile.obsRole == nil {
                     VStack {
                         Spacer()
                         Text(tile.label.isEmpty && tile.sfSymbol == nil && tile.imagePath == nil
@@ -1042,10 +1050,27 @@ struct TileInspector: View {
     @State private var action: ControlAction = .none
     @State private var releaseAction: ControlAction = .none
     @State private var mode: ControlMode = .tap
+    @State private var obsRole: OBSTileRole? = nil
     @State private var showSymbolPicker = false
+
+    private static let obsRoles: [OBSTileRole] = [.goLive, .record] + (0..<8).map { .scene($0) }
+        + [.mic, .bitrate, .dropped, .cpu, .fps]
 
     var body: some View {
         Form {
+            Section("OBS") {
+                Picker("OBS tile", selection: $obsRole) {
+                    Text("Not an OBS tile").tag(OBSTileRole?.none)
+                    ForEach(Self.obsRoles, id: \.self) { role in
+                        Text(role.displayName).tag(OBSTileRole?.some(role))
+                    }
+                }
+                if obsRole != nil {
+                    Text("Shows live OBS state and runs the OBS command; the settings below are ignored.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Tile \(tileIndex) — \(store.currentPage.name)") {
                 ColorPicker("Background", selection: $color, supportsOpacity: false)
                 Picker("Content", selection: $liveContent) {
@@ -1143,6 +1168,7 @@ struct TileInspector: View {
         action = tile.action
         releaseAction = tile.releaseAction
         mode = tile.mode
+        obsRole = tile.obsRole
     }
 
     private func apply() {
@@ -1158,7 +1184,8 @@ struct TileInspector: View {
                 diskSpaceVolume: diskSpaceVolume,
                 action: action,
                 releaseAction: releaseAction,
-                mode: mode
+                mode: mode,
+                obsRole: obsRole
             )
         }
         deviceManager.pushCurrentPage()
@@ -1184,10 +1211,16 @@ struct KnobInspector: View {
     @State private var showSymbolPicker = false
     @State private var isGlobal = false
     @State private var rotationMode: KnobRotationMode = .none
+    @State private var obsAudio: OBSAudioTarget? = nil
 
     var body: some View {
         Form {
             Section("Knob \(knobIndex + 1) (\(knobIndex < 3 ? "left" : "right") \(["top", "middle", "bottom"][knobIndex % 3]))") {
+                Picker("OBS audio", selection: $obsAudio) {
+                    Text("Not an OBS knob").tag(OBSAudioTarget?.none)
+                    Text("Mic/Aux volume").tag(OBSAudioTarget?.some(.mic))
+                    Text("Desktop audio volume").tag(OBSAudioTarget?.some(.desktop))
+                }
                 Toggle("Same knob on every page", isOn: $isGlobal)
                 if isGlobal {
                     Text("Pinned: editing this knob updates it everywhere, not just this page.")
@@ -1293,6 +1326,7 @@ struct KnobInspector: View {
     private func loadCurrent() {
         isGlobal = store.isKnobGlobal(knobIndex)
         let knob = store.knobConfig(knobIndex)
+        obsAudio = knob.obsAudio
         label = knob.label
         sfSymbol = knob.sfSymbol ?? ""
         imagePath = knob.imagePath ?? ""
@@ -1318,7 +1352,8 @@ struct KnobInspector: View {
             diskSpaceVolume: diskSpaceVolume,
             clockwise: clockwise,
             counterClockwise: counterClockwise,
-            press: press
+            press: press,
+            obsAudio: obsAudio
         ))
         deviceManager.pushCurrentPage()
     }

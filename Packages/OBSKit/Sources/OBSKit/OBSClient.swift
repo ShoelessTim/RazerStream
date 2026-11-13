@@ -60,11 +60,12 @@ public actor OBSClient {
     }
 
     /// Sends one request and returns its responseData as JSON.
-    public func request(_ type: String, data: [String: Any]? = nil, timeout: Duration = .seconds(2)) async throws -> Data {
+    public func request(_ type: String, data: [String: OBSParam]? = nil, timeout: Duration = .seconds(2)) async throws -> Data {
         guard let task else { throw OBSProtocolError.notConnected }
         nextRequestId += 1
         let id = "rs-\(nextRequestId)"
-        let message = String(decoding: try OBSMessages.request(type: type, id: id, data: data), as: UTF8.self)
+        let json = data?.mapValues(\.jsonValue)
+        let message = String(decoding: try OBSMessages.request(type: type, id: id, data: json), as: UTF8.self)
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
             pending[id] = continuation
@@ -89,6 +90,48 @@ public actor OBSClient {
         let record = try decoder.decode(OBSOutputStatus.self, from: try await request("GetRecordStatus"))
         return (stream, record)
     }
+
+    public func stats() async throws -> OBSStats {
+        try JSONDecoder().decode(OBSStats.self, from: try await request("GetStats"))
+    }
+
+    public func sceneList() async throws -> OBSSceneList {
+        try JSONDecoder().decode(OBSSceneList.self, from: try await request("GetSceneList"))
+    }
+
+    /// The inputs OBS itself treats as Mic/Aux 1 and Desktop Audio 1, by name.
+    public func specialInputs() async throws -> (mic: String?, desktop: String?) {
+        let data = try await request("GetSpecialInputs")
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return (object?["mic1"] as? String, object?["desktop1"] as? String)
+    }
+
+    public func inputMuted(_ input: String) async throws -> Bool {
+        let data = try await request("GetInputMute", data: ["inputName": .string(input)])
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return object?["inputMuted"] as? Bool ?? false
+    }
+
+    public func toggleInputMute(_ input: String) async throws {
+        _ = try await request("ToggleInputMute", data: ["inputName": .string(input)])
+    }
+
+    /// Nudges an input's volume by `deltaDb`, clamped to the range OBS's own
+    /// slider covers (-100 dB is silent, 0 dB is unity).
+    public func adjustInputVolume(_ input: String, deltaDb: Double) async throws {
+        let data = try await request("GetInputVolume", data: ["inputName": .string(input)])
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let current = (object?["inputVolumeDb"] as? NSNumber)?.doubleValue ?? 0
+        let next = min(0, max(-100, current + deltaDb))
+        _ = try await request("SetInputVolume", data: ["inputName": .string(input), "inputVolumeDb": .double(next)])
+    }
+
+    public func setScene(_ name: String) async throws {
+        _ = try await request("SetCurrentProgramScene", data: ["sceneName": .string(name)])
+    }
+
+    public func toggleStream() async throws { _ = try await request("ToggleStream") }
+    public func toggleRecord() async throws { _ = try await request("ToggleRecord") }
 
     // MARK: - Internals
 
