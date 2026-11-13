@@ -38,3 +38,7 @@ permission for keystrokes and media keys.
 If your unit behaves differently (a different firmware, id map, or PID), open an
 issue with the firmware version, the `rstream monitor` output for the controls
 in question, and what you expected.
+
+## Builder bot
+
+A Builder bot opens pull requests from issues labeled `builder` on `builder/*` branches; Tim reviews and merges them.
