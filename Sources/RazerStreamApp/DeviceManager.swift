@@ -255,11 +255,34 @@ final class DeviceManager: ObservableObject {
     private func startOBSLEDClock() {
         obsLEDTask?.cancel()
         obsLEDTask = Task { [weak self] in
+            var tick = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .milliseconds(250))
                 if Task.isCancelled { return }
-                await self?.refreshOBSLEDs()
+                tick += 1
+                // Moving tiles (live dot, pulse, spinner) step four times a second;
+                // everything else is checked once a second and redrawn only on change
+                if tick % 4 == 0 {
+                    await self?.refreshOBSLEDs()
+                } else {
+                    await self?.animateOBSTiles(phase: tick % 4)
+                }
             }
+        }
+    }
+
+    private var obsPhase = 0
+
+    private func animateOBSTiles(phase: Int) async {
+        guard connected, let device, let store, !isDimmed else { return }
+        guard Date().timeIntervalSince(lastPushAt) > 2 else { return }
+        obsPhase = phase
+        for (i, tile) in store.resolvedCurrentPage.tiles.enumerated() {
+            guard let role = tile.obsRole, i != obsHoldTile else { continue }
+            let face = obsFace(for: role)
+            guard face.isAnimated else { continue }
+            lastOBSFace[i] = face
+            try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face, phase: phase)))
         }
     }
 
@@ -276,9 +299,10 @@ final class DeviceManager: ObservableObject {
             for (i, tile) in page.tiles.enumerated() {
                 guard let role = tile.obsRole, i != obsHoldTile else { continue }
                 let face = obsFace(for: role)
-                guard lastOBSFace[i] != face else { continue }
+                guard lastOBSFace[i] != face || face.isAnimated else { continue }
                 lastOBSFace[i] = face
-                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face)))
+                obsPhase = 0
+                try? device.send(.setButtonImage(button: i, rgb565: TileRenderer.render(tile, obsFace: face, phase: 0)))
                 try? await Task.sleep(for: .milliseconds(60))
             }
         }
@@ -301,7 +325,7 @@ final class DeviceManager: ObservableObject {
         if let role = tile.obsRole {
             let face = obsFace(for: role)
             lastOBSFace[index] = face
-            return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress)
+            return TileRenderer.render(tile, obsFace: face, holdProgress: holdProgress, phase: obsPhase)
         }
         let isOn = toggleStates[toggleKey(tile: index)] ?? false
         return TileRenderer.render(tile, toggledOn: isOn)

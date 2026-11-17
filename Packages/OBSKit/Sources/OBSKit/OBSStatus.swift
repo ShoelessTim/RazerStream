@@ -23,6 +23,7 @@ public struct OBSSnapshot: Equatable, Sendable {
     public var cpuUsage: Double?          // percent, OBS process
     public var activeFps: Double?
     public var bitrateKbps: Double?       // stream upload, computed between polls
+    public var bitrateHistory: [Double] = []   // last ~30 seconds, oldest first, for the sparkline
 
     public init(connection: OBSConnectionState = .notRunning, stream: OBSOutputStatus? = nil,
                 record: OBSOutputStatus? = nil, lastUpdate: Date? = nil) {
@@ -161,16 +162,68 @@ public enum OBSTileRole: Codable, Hashable, Sendable {
     }
 }
 
-/// What one OBS tile shows: a small title, a big value, a background color.
+/// How a tile moves between full redraws.
+public enum OBSMotion: Equatable, Sendable {
+    case none
+    case liveDot      // a white dot in the corner that pulses (on air)
+    case iconPulse    // the icon fades in and out (attention: mic muted while live)
+    case spinner      // the icon turns (working: PREFLIGHT checking)
+}
+
+/// What one OBS tile shows: an icon (SF Symbol name), a big value, a small
+/// title, a background color, and optionally motion or a sparkline.
 public struct OBSFace: Equatable, Sendable {
     public var title: String
     public var value: String
     public var colorHex: String
+    public var icon: String?
+    public var motion: OBSMotion
+    public var sparkline: [Double]?
 
-    public init(title: String, value: String, colorHex: String) {
+    public init(title: String, value: String, colorHex: String, icon: String? = nil,
+                motion: OBSMotion = .none, sparkline: [Double]? = nil) {
         self.title = title
         self.value = value
         self.colorHex = colorHex
+        self.icon = icon
+        self.motion = motion
+        self.sparkline = sparkline
+    }
+
+    public var isAnimated: Bool { motion != .none }
+}
+
+public enum OBSIcons {
+    public static let goLive = "dot.radiowaves.left.and.right"
+    public static let hold = "hand.point.up.left.fill"
+    public static let record = "record.circle"
+    public static let scene = "video"
+    public static let sceneOnAir = "video.fill"
+    public static let mic = "mic.fill"
+    public static let micMuted = "mic.slash.fill"
+    public static let bitrate = "arrow.up.circle"
+    public static let dropped = "chart.line.downtrend.xyaxis"
+    public static let cpu = "cpu"
+    public static let fps = "speedometer"
+    public static let preflight = "checklist"
+    public static let checking = "arrow.triangle.2.circlepath"
+    public static let passed = "checkmark.seal.fill"
+    public static let failed = "exclamationmark.triangle.fill"
+    public static let noOBS = "bolt.slash.fill"
+    public static let password = "lock.fill"
+
+    public static func idle(for role: OBSTileRole) -> String {
+        switch role {
+        case .goLive:    return goLive
+        case .record:    return record
+        case .scene:     return scene
+        case .mic:       return mic
+        case .bitrate:   return bitrate
+        case .dropped:   return dropped
+        case .cpu:       return cpu
+        case .fps:       return fps
+        case .preflight: return preflight
+        }
     }
 }
 
@@ -186,62 +239,79 @@ public enum OBSFaces {
         // OBS silent: say so on every tile rather than show old numbers
         // (PREFLIGHT excepted: it is how OBS gets started)
         guard s.isFresh(at: now) || role == .preflight else {
-            let reason = s.connection == .authFailed ? "PASSWORD" : "NO OBS"
-            return OBSFace(title: role.shortTitle, value: reason, colorHex: unknown)
+            let auth = s.connection == .authFailed
+            return OBSFace(title: role.shortTitle, value: auth ? "PASSWORD" : "NO OBS", colorHex: unknown,
+                           icon: auth ? OBSIcons.password : OBSIcons.noOBS)
         }
 
         switch role {
         case .goLive:
             if s.isLive {
                 let reconnecting = s.stream?.outputReconnecting == true
-                return OBSFace(title: reconnecting ? "RECONNECTING" : "LIVE, hold to end",
+                return OBSFace(title: reconnecting ? "RECONNECTING" : "LIVE  hold to end",
                                value: duration(s.stream?.outputDuration),
-                               colorHex: reconnecting ? warn : live)
+                               colorHex: reconnecting ? warn : live,
+                               icon: OBSIcons.goLive, motion: reconnecting ? .iconPulse : .liveDot)
             }
-            return OBSFace(title: "hold", value: "GO LIVE", colorHex: neutral)
+            return OBSFace(title: "hold to start", value: "GO LIVE", colorHex: neutral, icon: OBSIcons.hold)
 
         case .record:
             guard let record = s.record, record.outputActive else {
-                return OBSFace(title: "REC", value: "OFF", colorHex: neutral)
+                return OBSFace(title: "REC", value: "OFF", colorHex: neutral, icon: OBSIcons.record)
             }
-            return OBSFace(title: record.outputPaused == true ? "REC PAUSED" : "REC",
-                           value: duration(record.outputDuration), colorHex: live)
+            let paused = record.outputPaused == true
+            return OBSFace(title: paused ? "REC PAUSED" : "REC",
+                           value: duration(record.outputDuration), colorHex: live,
+                           icon: OBSIcons.record, motion: paused ? .iconPulse : .liveDot)
 
         case .scene(let slot):
             guard s.scenes.indices.contains(slot) else {
-                return OBSFace(title: "SCENE \(slot + 1)", value: "none", colorHex: neutral)
+                return OBSFace(title: "SCENE \(slot + 1)", value: "none", colorHex: neutral, icon: OBSIcons.scene)
             }
             let name = s.scenes[slot]
             let onAir = name == s.currentScene
             return OBSFace(title: onAir ? "ON AIR" : "SCENE \(slot + 1)", value: name,
-                           colorHex: onAir ? good : neutral)
+                           colorHex: onAir ? good : neutral,
+                           icon: onAir ? OBSIcons.sceneOnAir : OBSIcons.scene)
 
         case .mic:
-            guard let muted = s.micMuted else { return OBSFace(title: "MIC", value: "none", colorHex: neutral) }
-            if muted { return OBSFace(title: "MIC", value: "MUTED", colorHex: s.isLive ? bad : warn) }
-            return OBSFace(title: "MIC", value: "ON", colorHex: good)
+            guard let muted = s.micMuted else {
+                return OBSFace(title: "MIC", value: "none", colorHex: neutral, icon: OBSIcons.mic)
+            }
+            if muted {
+                return OBSFace(title: "MIC", value: "MUTED", colorHex: s.isLive ? bad : warn,
+                               icon: OBSIcons.micMuted, motion: s.isLive ? .iconPulse : .none)
+            }
+            return OBSFace(title: "MIC", value: "ON", colorHex: good, icon: OBSIcons.mic)
 
         case .bitrate:
             guard s.isLive, let kbps = s.bitrateKbps else {
-                return OBSFace(title: "BITRATE", value: "--", colorHex: neutral)
+                return OBSFace(title: "BITRATE", value: "--", colorHex: neutral, icon: OBSIcons.bitrate)
             }
-            return OBSFace(title: "BITRATE kbps", value: "\(Int(kbps.rounded()))", colorHex: kbps < 1000 ? warn : good)
+            return OBSFace(title: "kbps", value: "\(Int(kbps.rounded()))", colorHex: kbps < 1000 ? warn : good,
+                           icon: OBSIcons.bitrate,
+                           sparkline: s.bitrateHistory.count >= 2 ? s.bitrateHistory : nil)
 
         case .dropped:
             guard s.isLive, let pct = s.droppedPercent else {
-                return OBSFace(title: "DROPPED", value: "--", colorHex: neutral)
+                return OBSFace(title: "DROPPED", value: "--", colorHex: neutral, icon: OBSIcons.dropped)
             }
             let color = pct >= 5 ? bad : pct >= 1 ? warn : good
-            return OBSFace(title: "DROPPED", value: String(format: "%.1f%%", pct), colorHex: color)
+            return OBSFace(title: "DROPPED", value: String(format: "%.1f%%", pct), colorHex: color,
+                           icon: OBSIcons.dropped, motion: pct >= 5 ? .iconPulse : .none)
 
         case .cpu:
-            guard let cpu = s.cpuUsage else { return OBSFace(title: "OBS CPU", value: "--", colorHex: neutral) }
+            guard let cpu = s.cpuUsage else {
+                return OBSFace(title: "OBS CPU", value: "--", colorHex: neutral, icon: OBSIcons.cpu)
+            }
             let color = cpu >= 80 ? bad : cpu >= 50 ? warn : good
-            return OBSFace(title: "OBS CPU", value: "\(Int(cpu.rounded()))%", colorHex: color)
+            return OBSFace(title: "OBS CPU", value: "\(Int(cpu.rounded()))%", colorHex: color, icon: OBSIcons.cpu)
 
         case .fps:
-            guard let fps = s.activeFps else { return OBSFace(title: "FPS", value: "--", colorHex: neutral) }
-            return OBSFace(title: "FPS", value: "\(Int(fps.rounded()))", colorHex: neutral)
+            guard let fps = s.activeFps else {
+                return OBSFace(title: "FPS", value: "--", colorHex: neutral, icon: OBSIcons.fps)
+            }
+            return OBSFace(title: "FPS", value: "\(Int(fps.rounded()))", colorHex: neutral, icon: OBSIcons.fps)
 
         case .preflight:
             return OBSPreflight.face(running: false, result: nil)   // the app draws the real state
@@ -258,6 +328,15 @@ public enum OBSFaces {
 // MARK: - Bitrate
 
 public enum OBSRates {
+    /// Seconds of bitrate history the sparkline shows.
+    public static let historyLength = 30
+
+    /// Appends a reading and keeps only the newest `historyLength`.
+    public static func appending(_ kbps: Double?, to history: [Double]) -> [Double] {
+        guard let kbps else { return [] }   // not live: the line starts over next stream
+        return Array((history + [kbps]).suffix(historyLength))
+    }
+
     /// Upload rate in kilobits per second between two byte counts.
     public static func kbps(fromBytes before: Double, at t0: Date, toBytes after: Double, at t1: Date) -> Double? {
         let seconds = t1.timeIntervalSince(t0)

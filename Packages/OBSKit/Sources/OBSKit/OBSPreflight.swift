@@ -79,11 +79,18 @@ public enum OBSPreflight {
 
     /// The PREFLIGHT tile's face.
     public static func face(running: Bool, result: OBSPreflightResult?) -> OBSFace {
-        if running { return OBSFace(title: "PREFLIGHT", value: "CHECKING", colorHex: OBSFaces.warn) }
-        guard let result else { return OBSFace(title: "tap to check", value: "PREFLIGHT", colorHex: OBSFaces.neutral) }
-        if result.allPassed { return OBSFace(title: "PREFLIGHT", value: "ALL GREEN", colorHex: OBSFaces.good) }
+        if running {
+            return OBSFace(title: "PREFLIGHT", value: "CHECKING", colorHex: OBSFaces.warn,
+                           icon: OBSIcons.checking, motion: .spinner)
+        }
+        guard let result else {
+            return OBSFace(title: "tap to check", value: "PREFLIGHT", colorHex: OBSFaces.neutral, icon: OBSIcons.preflight)
+        }
+        if result.allPassed {
+            return OBSFace(title: "PREFLIGHT", value: "ALL GREEN", colorHex: OBSFaces.good, icon: OBSIcons.passed)
+        }
         let first = result.failures[0].detail
         let more = result.failures.count > 1 ? " +\(result.failures.count - 1)" : ""
-        return OBSFace(title: "PREFLIGHT", value: first + more, colorHex: OBSFaces.bad)
+        return OBSFace(title: "PREFLIGHT", value: first + more, colorHex: OBSFaces.bad, icon: OBSIcons.failed)
     }
 }

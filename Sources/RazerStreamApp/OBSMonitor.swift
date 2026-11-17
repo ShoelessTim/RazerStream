@@ -160,6 +160,7 @@ final class OBSMonitor: ObservableObject {
                 next.cpuUsage = stats?.cpuUsage
                 next.activeFps = stats?.activeFps
                 next.bitrateKbps = bitrate(status.stream, at: now)
+                next.bitrateHistory = OBSRates.appending(next.bitrateKbps, to: snapshot.bitrateHistory)
                 publish(next)
             } catch {
                 await client.disconnect()
