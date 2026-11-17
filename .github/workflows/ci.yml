@@ -37,7 +37,9 @@ jobs:
       # without a local toolchain. Ad hoc signed; re-sign locally if needed.
       - name: Package app
         run: |
+          scripts/fetch_icon_packs.sh
           scripts/make_app.sh release
+          test -d dist/RazerStream.app/Contents/Resources/IconPacks/Bootstrap
           ditto -c -k --keepParent dist/RazerStream.app dist/RazerStream.zip
 
       - name: Upload app
