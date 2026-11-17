@@ -96,14 +96,15 @@ enum TileRenderer {
 
     /// `obsFace` draws an OBS page tile (title over a large value on a status
     /// color) in place of the tile's own label, icon and color.
-    static func render(_ tile: TileConfig, toggledOn: Bool = false, obsFace: OBSFace?, holdProgress: Double? = nil) -> Data {
+    static func render(_ tile: TileConfig, toggledOn: Bool = false, obsFace: OBSFace?,
+                       holdProgress: Double? = nil, phase: Int = 0) -> Data {
         let size = RazerStreamController.buttonSize
         guard let ctx = makeContext(width: size, height: size) else {
             return Data(count: size * size * 2)
         }
 
         if let face = obsFace {
-            drawOBSFace(face, holdProgress: holdProgress, in: ctx, canvas: size)
+            drawOBSFace(face, holdProgress: holdProgress, phase: phase, in: ctx, canvas: size)
             return rgb565(from: ctx, width: size, height: size)
         }
 
@@ -434,18 +435,67 @@ enum TileRenderer {
                                    width: w, height: h))
     }
 
-    private static func drawOBSFace(_ face: OBSFace, holdProgress: Double?, in ctx: CGContext, canvas: Int) {
+    /// OBS tile, status-block style: icon top left, big value, small title,
+    /// on a status color. `phase` (0 to 3) animates the face's motion; the
+    /// deck redraws an animated tile a few times a second.
+    private static func drawOBSFace(_ face: OBSFace, holdProgress: Double?, phase: Int,
+                                    in ctx: CGContext, canvas: Int) {
         let s = CGFloat(canvas)
         ctx.setFillColor(color(fromHex: face.colorHex))
         ctx.fill(CGRect(x: 0, y: 0, width: s, height: s))
+
         // Hold-to-fire: the tile fills from the bottom while the finger stays down
         if let progress = holdProgress {
             ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.35))
             ctx.fill(CGRect(x: 0, y: 0, width: s, height: s * CGFloat(min(1, max(0, progress)))))
         }
-        drawText(face.title, in: ctx, canvas: canvas, fontSize: 10, yOffset: s * 0.70)
+
+        // Bitrate history, faint behind the number
+        if let points = face.sparkline, points.count >= 2, let top = points.max(), top > 0 {
+            let left: CGFloat = 8, width = s - 16, bottom: CGFloat = 26, height: CGFloat = 22
+            ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.45))
+            ctx.setLineWidth(2)
+            ctx.setLineJoin(.round)
+            for (i, value) in points.enumerated() {
+                let x = left + width * CGFloat(i) / CGFloat(points.count - 1)
+                let y = bottom + height * CGFloat(value / top)
+                i == 0 ? ctx.move(to: CGPoint(x: x, y: y)) : ctx.addLine(to: CGPoint(x: x, y: y))
+            }
+            ctx.strokePath()
+        }
+
+        // Icon, top left; pulses or turns when the face asks for motion
+        if let name = face.icon, let icon = symbolImage(name, pointSize: 15) {
+            let box: CGFloat = 20
+            let rect = CGRect(x: 7, y: s - box - 7, width: box, height: box)
+            ctx.saveGState()
+            switch face.motion {
+            case .iconPulse:
+                ctx.setAlpha(phase % 2 == 0 ? 1 : 0.25)
+            case .spinner:
+                ctx.translateBy(x: rect.midX, y: rect.midY)
+                ctx.rotate(by: -CGFloat(phase) * .pi / 2)
+                ctx.translateBy(x: -rect.midX, y: -rect.midY)
+            default:
+                break
+            }
+            let w = CGFloat(icon.width), h = CGFloat(icon.height)
+            let fit = min(box / w, box / h, 1)
+            let drawn = CGRect(x: rect.midX - w * fit / 2, y: rect.midY - h * fit / 2, width: w * fit, height: h * fit)
+            ctx.draw(icon, in: drawn)
+            ctx.restoreGState()
+        }
+
+        // On air: a white dot top right that breathes
+        if face.motion == .liveDot {
+            let r: CGFloat = phase % 2 == 0 ? 6 : 4
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: phase % 2 == 0 ? 1 : 0.5))
+            ctx.fillEllipse(in: CGRect(x: s - 15 - r, y: s - 17 - r, width: r * 2, height: r * 2))
+        }
+
         let valueSize: CGFloat = face.value.count > 9 ? 12 : face.value.count > 6 ? 15 : 20
-        drawText(face.value, in: ctx, canvas: canvas, fontSize: valueSize, yOffset: s * 0.30)
+        drawText(face.value, in: ctx, canvas: canvas, fontSize: valueSize, yOffset: s * 0.40)
+        drawText(face.title, in: ctx, canvas: canvas, fontSize: 10, yOffset: s * 0.10)
     }
 
     private static func drawText(

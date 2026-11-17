@@ -426,7 +426,7 @@ extension ContentView {
                     .fill(Color.quantizedToTilePanel(hex: tile.colorHex))
                 if let role = tile.obsRole {
                     VStack(spacing: 2) {
-                        Text("OBS").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.7))
+                        Image(systemName: OBSIcons.idle(for: role)).font(.system(size: 18)).foregroundStyle(.white)
                         Text(role.displayName).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                             .multilineTextAlignment(.center)
                     }
@@ -1054,7 +1054,7 @@ struct TileInspector: View {
     @State private var showSymbolPicker = false
 
     private static let obsRoles: [OBSTileRole] = [.goLive, .record] + (0..<8).map { .scene($0) }
-        + [.mic, .bitrate, .dropped, .cpu, .fps]
+        + [.mic, .bitrate, .dropped, .cpu, .fps, .preflight]
 
     var body: some View {
         Form {

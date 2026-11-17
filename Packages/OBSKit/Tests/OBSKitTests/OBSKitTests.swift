@@ -247,3 +247,88 @@ final class OBSPageTests: XCTestCase {
         XCTAssertEqual(alerts, [.micMutedWhileLive, .micMutedWhileLive])
     }
 }
+
+final class OBSPreflightTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 20_000)
+
+    func ready() -> OBSSnapshot {
+        var s = OBSSnapshot(connection: .connected, stream: OBSOutputStatus(outputActive: false),
+                            record: OBSOutputStatus(outputActive: false), lastUpdate: now)
+        s.micInput = "Mic/Aux"
+        s.micMuted = false
+        s.scenes = ["Cam", "Screen"]
+        return s
+    }
+
+    func testAllGreen() {
+        let result = OBSPreflight.evaluate(ready(), streamKeySet: true, freeDiskGB: 200, at: now)
+        XCTAssertTrue(result.allPassed)
+        XCTAssertEqual(OBSPreflight.face(running: false, result: result).value, "ALL GREEN")
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: result), 1)
+    }
+
+    func testFailuresNameTheProblemAndLengthenTheHold() {
+        var s = ready()
+        s.micMuted = true
+        let result = OBSPreflight.evaluate(s, streamKeySet: false, freeDiskGB: 3, at: now)
+        XCTAssertEqual(result.failures.map(\.item), [.mic, .streamKey, .disk])
+        XCTAssertEqual(OBSPreflight.face(running: false, result: result).value, "MIC MUTED +2")
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: result), 3)
+    }
+
+    func testUnknownsFail() {
+        let result = OBSPreflight.evaluate(OBSSnapshot(), streamKeySet: nil, freeDiskGB: nil, at: now)
+        XCTAssertEqual(result.failures.count, OBSPreflightCheck.Item.allCases.count)
+        XCTAssertEqual(result.checks.first?.detail, "NO OBS")
+    }
+
+    func testNeverRunIsNormalHold() {
+        XCTAssertEqual(OBSPreflight.goLiveHoldSeconds(after: nil), 1)
+        XCTAssertEqual(OBSPreflight.face(running: false, result: nil).value, "PREFLIGHT")
+    }
+}
+
+final class OBSTileStyleTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 30_000)
+
+    func snapshot(live: Bool, micMuted: Bool = false) -> OBSSnapshot {
+        var s = OBSSnapshot(connection: .connected,
+                            stream: OBSOutputStatus(outputActive: live, outputReconnecting: false, outputDuration: 0),
+                            record: OBSOutputStatus(outputActive: false), lastUpdate: now)
+        s.micInput = "Mic"
+        s.micMuted = micMuted
+        return s
+    }
+
+    func testEveryRoleHasAnIcon() {
+        let roles: [OBSTileRole] = [.goLive, .record, .scene(0), .mic, .bitrate, .dropped, .cpu, .fps]
+        for role in roles {
+            XCTAssertNotNil(OBSFaces.face(for: role, in: snapshot(live: false), at: now).icon, "\(role)")
+            XCTAssertNotNil(OBSFaces.face(for: role, in: OBSSnapshot(), at: now).icon, "\(role) stale")
+        }
+        XCTAssertNotNil(OBSPreflight.face(running: false, result: nil).icon)
+    }
+
+    func testMotionOnlyWhereItMatters() {
+        XCTAssertEqual(OBSFaces.face(for: .goLive, in: snapshot(live: true), at: now).motion, .liveDot)
+        XCTAssertEqual(OBSFaces.face(for: .goLive, in: snapshot(live: false), at: now).motion, .none)
+        XCTAssertEqual(OBSFaces.face(for: .mic, in: snapshot(live: true, micMuted: true), at: now).motion, .iconPulse)
+        XCTAssertEqual(OBSFaces.face(for: .mic, in: snapshot(live: false, micMuted: true), at: now).motion, .none)
+        XCTAssertEqual(OBSPreflight.face(running: true, result: nil).motion, .spinner)
+    }
+
+    func testBitrateHistoryCapsAndResets() {
+        var history: [Double] = []
+        for i in 0..<40 { history = OBSRates.appending(Double(i), to: history) }
+        XCTAssertEqual(history.count, OBSRates.historyLength)
+        XCTAssertEqual(history.last, 39)
+        XCTAssertEqual(OBSRates.appending(nil, to: history), [])
+    }
+
+    func testBitrateTileCarriesSparkline() {
+        var s = snapshot(live: true)
+        s.bitrateKbps = 6000
+        s.bitrateHistory = [5800, 6000, 6100]
+        XCTAssertEqual(OBSFaces.face(for: .bitrate, in: s, at: now).sparkline, [5800, 6000, 6100])
+    }
+}
