@@ -51,6 +51,8 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
     <key>CFBundleIconFile</key>            <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>RazerStream reads Apple Music playback information and runs AppleScript actions configured by the user.</string>
     <key>NSHumanReadableCopyright</key>    <string>Community project — MIT</string>
     <key>UTExportedTypeDeclarations</key>
     <array>

@@ -17,6 +17,7 @@ public final class RazerStreamDevice: @unchecked Sendable {
 
     private var continuation: AsyncStream<DeviceEvent>.Continuation?
     private let lock = NSLock()
+    private let sendLock = NSLock()
 
     // The device requires an HTTP-style websocket upgrade over serial before
     // it will speak WS frames. Until the response arrives, buffer raw bytes.
@@ -96,28 +97,30 @@ public final class RazerStreamDevice: @unchecked Sendable {
     // MARK: - Send commands
 
     public func send(_ command: DeviceCommand) throws {
-        let (cmd, payload) = command.encode()
-        let id = nextTxID()
+        try sendLock.withLock {
+            let (cmd, payload) = command.encode()
+            let id = nextTxID()
 
-        var message = Data(capacity: 3 + payload.count)
-        // Protocol message: [msgLength(1), command(1), txID(1), ...payload]
-        let msgLength = UInt8(min(3 + payload.count, Int(UInt8.max)))
-        message.append(msgLength)
-        message.append(cmd.rawValue)
-        message.append(id)
-        message.append(payload)
+            var message = Data(capacity: 3 + payload.count)
+            // Protocol message: [msgLength(1), command(1), txID(1), ...payload]
+            let msgLength = UInt8(min(3 + payload.count, Int(UInt8.max)))
+            message.append(msgLength)
+            message.append(cmd.rawValue)
+            message.append(id)
+            message.append(payload)
 
-        let frame = WSFrameCodec.encode(message)
-        try transport.write(frame)
+            let frame = WSFrameCodec.encode(message)
+            try transport.write(frame)
 
-        if Self.debug {
-            let hex = frame.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " ")
-            print("[TX \(frame.count)B] \(hex)\(frame.count > 32 ? " …" : "")")
-        }
+            if Self.debug {
+                let hex = frame.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " ")
+                print("[TX \(frame.count)B] \(hex)\(frame.count > 32 ? " …" : "")")
+            }
 
-        // FRAMEBUFF always needs a DRAW command to push pixels to screen
-        if case .frameBuffer = cmd {
-            try sendDraw()
+            // FRAMEBUFF always needs a DRAW command to push pixels to screen
+            if case .frameBuffer = cmd {
+                try sendDraw()
+            }
         }
     }
 

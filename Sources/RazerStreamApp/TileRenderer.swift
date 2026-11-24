@@ -90,14 +90,16 @@ enum TileRenderer {
 
     // MARK: - Tiles (90×90)
 
-    static func render(_ tile: TileConfig, toggledOn: Bool = false) -> Data {
-        render(tile, toggledOn: toggledOn, obsFace: nil)
+    static func render(_ tile: TileConfig, toggledOn: Bool = false,
+                       orientation: DeviceOrientation = .standard) -> Data {
+        render(tile, toggledOn: toggledOn, obsFace: nil, orientation: orientation)
     }
 
     /// `obsFace` draws an OBS page tile (title over a large value on a status
     /// color) in place of the tile's own label, icon and color.
     static func render(_ tile: TileConfig, toggledOn: Bool = false, obsFace: OBSFace?,
-                       holdProgress: Double? = nil, phase: Int = 0) -> Data {
+                       holdProgress: Double? = nil, phase: Int = 0,
+                       orientation: DeviceOrientation = .standard) -> Data {
         let size = RazerStreamController.buttonSize
         guard let ctx = makeContext(width: size, height: size) else {
             return Data(count: size * size * 2)
@@ -105,7 +107,8 @@ enum TileRenderer {
 
         if let face = obsFace {
             drawOBSFace(face, holdProgress: holdProgress, phase: phase, in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         }
 
         ctx.setFillColor(color(fromHex: tile.colorHex))
@@ -115,13 +118,16 @@ enum TileRenderer {
         // color and toggle ring above/below still apply
         if tile.liveContent == .clock {
             drawClockFace(in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         } else if tile.liveContent == .systemMeter {
             drawSystemMeter(in: ctx, canvas: size)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         } else if tile.liveContent == .diskSpace {
             drawDiskSpace(in: ctx, canvas: size, volumePath: tile.diskSpaceVolume)
-            return rgb565(from: ctx, width: size, height: size)
+            return oriented(rgb565(from: ctx, width: size, height: size),
+                            width: size, height: size, orientation: orientation)
         }
 
         // Toggles that are ON use the alternate icon when set
@@ -160,13 +166,19 @@ enum TileRenderer {
             ctx.stroke(CGRect(x: 2, y: 2, width: size - 4, height: size - 4))
         }
 
-        return rgb565(from: ctx, width: size, height: size)
+        return oriented(rgb565(from: ctx, width: size, height: size),
+                        width: size, height: size, orientation: orientation)
     }
 
     // MARK: - Knob zones (60×90)
 
-    static func renderKnobZone(_ knob: KnobConfig, index: Int) -> Data {
-        let w = 60, h = 90
+    static func renderKnobZone(
+        _ knob: KnobConfig,
+        index: Int,
+        orientation: DeviceOrientation = .standard
+    ) -> Data {
+        let w = orientation == .clockwise ? 90 : 60
+        let h = orientation == .clockwise ? 60 : 90
         guard let ctx = makeContext(width: w, height: h) else {
             return Data(count: w * h * 2)
         }
@@ -176,13 +188,16 @@ enum TileRenderer {
 
         if knob.liveContent == .clock {
             drawCompactClockFace(in: ctx, width: w, height: h)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         } else if knob.liveContent == .systemMeter {
             drawCompactSystemMeter(in: ctx, width: w, height: h)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         } else if knob.liveContent == .diskSpace {
             drawCompactDiskSpace(in: ctx, width: w, height: h, volumePath: knob.diskSpaceVolume)
-            return rgb565(from: ctx, width: w, height: h)
+            return oriented(rgb565(from: ctx, width: w, height: h),
+                            width: w, height: h, orientation: orientation)
         }
 
         // Center the icon and label as one vertical group; icon alone sits
@@ -225,7 +240,84 @@ enum TileRenderer {
                      fontSize: 10, yOffset: nil)
         }
 
-        return rgb565(from: ctx, width: w, height: h)
+        return oriented(rgb565(from: ctx, width: w, height: h),
+                        width: w, height: h, orientation: orientation)
+    }
+
+    // MARK: - Spanning side strip
+
+    static func renderMusicBanner(
+        _ nowPlaying: MusicNowPlaying,
+        orientation: DeviceOrientation
+    ) -> Data {
+        let width = orientation == .clockwise ? 270 : 60
+        let height = orientation == .clockwise ? 60 : 270
+        guard let ctx = makeContext(width: width, height: height) else {
+            return Data(count: width * height * 2)
+        }
+
+        ctx.setFillColor(CGColor(red: 0.055, green: 0.055, blue: 0.07, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        let accent: NSColor
+        let title: String
+        let detail: String
+        switch nowPlaying.state {
+        case .notRunning:
+            accent = .tertiaryLabelColor
+            title = "Apple Music"
+            detail = "Not running"
+        case .unavailable:
+            accent = .systemRed
+            title = "Apple Music"
+            detail = "Metadata unavailable"
+        case .stopped:
+            accent = .tertiaryLabelColor
+            title = "Apple Music"
+            detail = "Stopped"
+        case .paused:
+            accent = .systemOrange
+            title = nowPlaying.title.isEmpty ? "Apple Music" : nowPlaying.title
+            detail = nowPlaying.artist.isEmpty ? "Paused" : "Paused · \(nowPlaying.artist)"
+        case .playing:
+            accent = .systemPink
+            title = nowPlaying.title.isEmpty ? "Apple Music" : nowPlaying.title
+            detail = nowPlaying.artist.isEmpty ? "Playing" : nowPlaying.artist
+        }
+
+        let rotatedSafeInset: CGFloat = 10
+        let accentX = orientation == .clockwise ? rotatedSafeInset : 0
+        ctx.setFillColor(accent.cgColor)
+        ctx.fill(CGRect(x: accentX, y: 0, width: 5, height: CGFloat(height)))
+        if orientation == .clockwise {
+            // The physical window masks the ends of the rotated strip.
+            let contentInset = rotatedSafeInset + 10
+            let safeRight = CGFloat(width) - rotatedSafeInset
+            let artworkFrame = CGRect(x: contentInset, y: 9, width: 42, height: 42)
+            let hasArtwork = drawArtwork(nowPlaying.artworkData, in: ctx, frame: artworkFrame)
+            let textX = hasArtwork ? artworkFrame.maxX + 5 : contentInset
+            let textWidth = safeRight - textX
+            drawBannerLine(title, in: ctx, frame: CGRect(x: textX, y: 30, width: textWidth, height: 22),
+                           font: .boldSystemFont(ofSize: 18), color: .white)
+            drawBannerLine(detail, in: ctx, frame: CGRect(x: textX, y: 9, width: textWidth, height: 17),
+                           font: .systemFont(ofSize: 12, weight: .medium), color: .secondaryLabelColor)
+        } else {
+            let hasArtwork = drawArtwork(nowPlaying.artworkData, in: ctx,
+                                         frame: CGRect(x: 9, y: 211, width: 42, height: 42))
+            if !hasArtwork {
+                drawPanelText("♫", in: ctx, frame: CGRect(x: 9, y: 218, width: 42, height: 30),
+                              font: .systemFont(ofSize: 22), color: accent)
+            }
+            drawPanelText(title, in: ctx, frame: CGRect(x: 8, y: 108, width: 44, height: 92),
+                          font: .boldSystemFont(ofSize: 12), color: .white)
+            drawPanelText(detail, in: ctx, frame: CGRect(x: 8, y: 28, width: 44, height: 70),
+                          font: .systemFont(ofSize: 10, weight: .medium), color: .secondaryLabelColor)
+        }
+
+        let logical = rgb565(from: ctx, width: width, height: height)
+        guard orientation == .clockwise else { return logical }
+        return RGB565.rotatedCounterClockwise(logical, width: width, height: height)
+            ?? Data(count: width * height * 2)
     }
 
     /// A smaller clock face sized for the 60-wide knob strip; time only,
@@ -498,6 +590,29 @@ enum TileRenderer {
         drawText(face.title, in: ctx, canvas: canvas, fontSize: 10, yOffset: s * 0.10)
     }
 
+    @discardableResult
+    private static func drawArtwork(_ data: Data?, in ctx: CGContext, frame: CGRect) -> Bool {
+        guard let data,
+              let image = NSImage(data: data),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return false }
+
+        let iw = CGFloat(cgImage.width)
+        let ih = CGFloat(cgImage.height)
+        let scale = max(frame.width / iw, frame.height / ih)
+        let drawSize = CGSize(width: iw * scale, height: ih * scale)
+        let drawRect = CGRect(x: frame.midX - drawSize.width / 2,
+                              y: frame.midY - drawSize.height / 2,
+                              width: drawSize.width, height: drawSize.height)
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: frame, cornerWidth: 5, cornerHeight: 5, transform: nil))
+        ctx.clip()
+        ctx.interpolationQuality = .high
+        ctx.draw(cgImage, in: drawRect)
+        ctx.restoreGState()
+        return true
+    }
+
     private static func drawText(
         _ text: String, in ctx: CGContext, canvas: Int, height: Int? = nil,
         fontSize: CGFloat, yOffset: CGFloat?
@@ -524,6 +639,48 @@ enum TileRenderer {
         NSGraphicsContext.restoreGraphicsState()
     }
 
+    private static func drawBannerLine(
+        _ text: String,
+        in ctx: CGContext,
+        frame: CGRect,
+        font: NSFont,
+        color: NSColor
+    ) {
+        let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsCtx
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .left
+        paragraph.lineBreakMode = .byTruncatingTail
+        NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+        ]).draw(in: frame)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private static func drawPanelText(
+        _ text: String,
+        in ctx: CGContext,
+        frame: CGRect,
+        font: NSFont,
+        color: NSColor
+    ) {
+        let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsCtx
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineBreakMode = .byWordWrapping
+        NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+        ]).draw(in: frame)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
     /// RGBA8888 → RGB565 LE. CGContext memory is top-row-first; no flipping.
     private static func rgb565(from ctx: CGContext, width: Int, height: Int) -> Data {
         guard let pixels = ctx.data else { return Data(count: width * height * 2) }
@@ -540,6 +697,20 @@ enum TileRenderer {
             }
         }
         return out
+    }
+
+    private static func oriented(
+        _ rgb565: Data,
+        width: Int,
+        height: Int,
+        orientation: DeviceOrientation
+    ) -> Data {
+        switch orientation {
+        case .standard:  return rgb565
+        case .clockwise:
+            return RGB565.rotatedCounterClockwise(rgb565, width: width, height: height)
+                ?? Data(count: width * height * 2)
+        }
     }
 
     private static func color(fromHex hex: String) -> CGColor {

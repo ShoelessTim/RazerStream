@@ -40,6 +40,7 @@ struct SettingsView: View {
     @State private var clockwiseIncreases = KnobDirection.clockwiseIncreases
     @State private var idleDimmingEnabled = IdleDimming.isEnabled
     @State private var idleDimmingMinutes = IdleDimming.minutes
+    @State private var deviceOrientation: DeviceOrientation = .standard
     @State private var reportCopied = false
 
     var body: some View {
@@ -120,6 +121,17 @@ struct SettingsView: View {
                     store.updateActive { $0.brightness = UInt8(v) }
                     deviceManager.pushBrightness()
                 }
+
+                Picker("Orientation", selection: $deviceOrientation) {
+                    ForEach(DeviceOrientation.allCases) { orientation in
+                        Text(orientation.displayName).tag(orientation)
+                    }
+                }
+                .onChange(of: deviceOrientation) { _, orientation in
+                    store.updateActive { $0.deviceOrientation = orientation }
+                    deviceManager.pushCurrentPage()
+                }
+
             }
 
             Section {
@@ -214,6 +226,7 @@ struct SettingsView: View {
             clockwiseIncreases = KnobDirection.clockwiseIncreases
             idleDimmingEnabled = IdleDimming.isEnabled
             idleDimmingMinutes = IdleDimming.minutes
+            deviceOrientation = store.activeProfile.deviceOrientation
         }
     }
 

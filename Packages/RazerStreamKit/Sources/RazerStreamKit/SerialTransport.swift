@@ -173,6 +173,7 @@ public final class SerialTransport {
     private var writeFD: Int32 = -1
     private var readThread: Thread?
     private var keepReading = false
+    private let writeLock = NSLock()
 
     /// Opens the serial port (separate read and write descriptors) and
     /// configures termios.
@@ -284,13 +285,21 @@ public final class SerialTransport {
     // MARK: - Write
 
     public func write(_ data: Data) throws {
-        guard writeFD >= 0 else { throw TransportError.notOpen }
-        let written = data.withUnsafeBytes { ptr -> Int in
-            guard let base = ptr.baseAddress else { return 0 }
-            return Darwin.write(writeFD, base, data.count)
-        }
-        if written < 0 {
-            throw TransportError.writeFailed(errno)
+        try writeLock.withLock {
+            guard writeFD >= 0 else { throw TransportError.notOpen }
+            var offset = 0
+            while offset < data.count {
+                let written = data.withUnsafeBytes { ptr -> Int in
+                    guard let base = ptr.baseAddress else { return 0 }
+                    return Darwin.write(writeFD, base.advanced(by: offset), data.count - offset)
+                }
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    throw TransportError.writeFailed(errno)
+                }
+                guard written > 0 else { throw TransportError.writeFailed(EIO) }
+                offset += written
+            }
         }
     }
 

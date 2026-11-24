@@ -33,6 +33,23 @@ final class DeviceCommandTests: XCTestCase {
         XCTAssertEqual(y, 90)
     }
 
+    func testSpanningRightStripImage() {
+        let pixels = Data(count: 60 * 270 * 2)
+        let (cmd, payload) = DeviceCommand.setDisplayImage(
+            display: .center, x: 420, y: 0, w: 60, h: 270, rgb565: pixels
+        ).encode()
+
+        XCTAssertEqual(cmd, .frameBuffer)
+        XCTAssertEqual(payload.count, 10 + pixels.count)
+        XCTAssertEqual(Array(payload.prefix(10)), [
+            0x00, 0x4D,
+            0x01, 0xA4,
+            0x00, 0x00,
+            0x00, 0x3C,
+            0x01, 0x0E,
+        ])
+    }
+
     func testVibrateEncoding() {
         let (cmd, payload) = DeviceCommand.vibrate(.short).encode()
         XCTAssertEqual(cmd, .setVibration)
