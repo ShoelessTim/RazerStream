@@ -285,17 +285,30 @@ enum TileRenderer {
             detail = nowPlaying.artist.isEmpty ? "Playing" : nowPlaying.artist
         }
 
+        let rotatedSafeInset: CGFloat = 10
+        let accentX = orientation == .clockwise ? rotatedSafeInset : 0
         ctx.setFillColor(accent.cgColor)
-        ctx.fill(CGRect(x: 0, y: 0, width: 5, height: height))
+        ctx.fill(CGRect(x: accentX, y: 0, width: 5, height: CGFloat(height)))
         if orientation == .clockwise {
-            drawBannerLine(title, in: ctx, frame: CGRect(x: 14, y: 30, width: 246, height: 22),
+            // The physical window masks the ends of the rotated strip.
+            let contentInset = rotatedSafeInset + 10
+            let safeRight = CGFloat(width) - rotatedSafeInset
+            let artworkFrame = CGRect(x: contentInset, y: 9, width: 42, height: 42)
+            let hasArtwork = drawArtwork(nowPlaying.artworkData, in: ctx, frame: artworkFrame)
+            let textX = hasArtwork ? artworkFrame.maxX + 5 : contentInset
+            let textWidth = safeRight - textX
+            drawBannerLine(title, in: ctx, frame: CGRect(x: textX, y: 30, width: textWidth, height: 22),
                            font: .boldSystemFont(ofSize: 18), color: .white)
-            drawBannerLine(detail, in: ctx, frame: CGRect(x: 14, y: 9, width: 246, height: 17),
+            drawBannerLine(detail, in: ctx, frame: CGRect(x: textX, y: 9, width: textWidth, height: 17),
                            font: .systemFont(ofSize: 12, weight: .medium), color: .secondaryLabelColor)
         } else {
-            drawPanelText("♫", in: ctx, frame: CGRect(x: 9, y: 218, width: 42, height: 30),
-                          font: .systemFont(ofSize: 22), color: accent)
-            drawPanelText(title, in: ctx, frame: CGRect(x: 8, y: 112, width: 44, height: 92),
+            let hasArtwork = drawArtwork(nowPlaying.artworkData, in: ctx,
+                                         frame: CGRect(x: 9, y: 211, width: 42, height: 42))
+            if !hasArtwork {
+                drawPanelText("♫", in: ctx, frame: CGRect(x: 9, y: 218, width: 42, height: 30),
+                              font: .systemFont(ofSize: 22), color: accent)
+            }
+            drawPanelText(title, in: ctx, frame: CGRect(x: 8, y: 108, width: 44, height: 92),
                           font: .boldSystemFont(ofSize: 12), color: .white)
             drawPanelText(detail, in: ctx, frame: CGRect(x: 8, y: 28, width: 44, height: 70),
                           font: .systemFont(ofSize: 10, weight: .medium), color: .secondaryLabelColor)
@@ -575,6 +588,29 @@ enum TileRenderer {
         let valueSize: CGFloat = face.value.count > 9 ? 12 : face.value.count > 6 ? 15 : 20
         drawText(face.value, in: ctx, canvas: canvas, fontSize: valueSize, yOffset: s * 0.40)
         drawText(face.title, in: ctx, canvas: canvas, fontSize: 10, yOffset: s * 0.10)
+    }
+
+    @discardableResult
+    private static func drawArtwork(_ data: Data?, in ctx: CGContext, frame: CGRect) -> Bool {
+        guard let data,
+              let image = NSImage(data: data),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return false }
+
+        let iw = CGFloat(cgImage.width)
+        let ih = CGFloat(cgImage.height)
+        let scale = max(frame.width / iw, frame.height / ih)
+        let drawSize = CGSize(width: iw * scale, height: ih * scale)
+        let drawRect = CGRect(x: frame.midX - drawSize.width / 2,
+                              y: frame.midY - drawSize.height / 2,
+                              width: drawSize.width, height: drawSize.height)
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: frame, cornerWidth: 5, cornerHeight: 5, transform: nil))
+        ctx.clip()
+        ctx.interpolationQuality = .high
+        ctx.draw(cgImage, in: drawRect)
+        ctx.restoreGState()
+        return true
     }
 
     private static func drawText(

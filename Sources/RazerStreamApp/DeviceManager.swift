@@ -289,8 +289,11 @@ final class DeviceManager: ObservableObject {
                 } else {
                     await self?.animateOBSTiles(phase: tick % 4)
                 }
-    private var obsPhase = 0
+            }
+        }
+    }
 
+    private var obsPhase = 0
 
     private func animateOBSTiles(phase: Int) async {
         guard connected, let device, let store, !isDimmed else { return }
